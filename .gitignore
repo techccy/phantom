@@ -1,0 +1,30 @@
+# 非代码产物不入库
+docs/
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / 前端
+node_modules/
+dist/
+.vite/
+*.local
+
+# 环境与日志
+.env
+.env.*
+!.env.example
+*.log
+
+# 编辑器
+.idea/
+.vscode/
+*.swp

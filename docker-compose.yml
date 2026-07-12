@@ -1,0 +1,10 @@
+# 便捷启动 Redis（Phantom 唯一外部依赖）。
+# 后端默认连接 redis://localhost:6379/0。
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: phantom-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
