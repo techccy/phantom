@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phantom 接入 Demo（模拟第三方网站）</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 16px; padding: 24px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0f1115; color: #eee;
+      }
+      .card {
+        background: #1a1d24; border-radius: 16px; padding: 28px;
+        display: flex; flex-direction: column; gap: 14px;
+        width: 360px;
+      }
+      h1 { font-size: 18px; margin: 0; text-align: center; }
+      label { font-size: 13px; color: #aaa; }
+      input {
+        width: 100%; padding: 10px 12px; border-radius: 8px;
+        border: 1px solid #333; background: #0f1115; color: #eee; font-size: 14px;
+      }
+      button.login {
+        width: 100%; padding: 12px; border: none; border-radius: 8px;
+        background: #3b82f6; color: #fff; font-size: 15px; cursor: pointer;
+      }
+      button.login:disabled { opacity: 0.5; cursor: not-allowed; }
+      #msg { font-size: 14px; min-height: 20px; text-align: center; }
+      .note { font-size: 12px; color: #777; line-height: 1.6; }
+      code { background:#000; padding:1px 5px; border-radius:4px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>登录（接入 Phantom 验证）</h1>
+
+      <div>
+        <label>用户名</label>
+        <input id="username" value="alice" />
+      </div>
+
+      <!-- Phantom widget 挂载点 -->
+      <div>
+        <label>人机验证</label>
+        <div id="phantom-box"></div>
+      </div>
+
+      <button class="login" id="login-btn" disabled>登录</button>
+      <div id="msg"></div>
+
+      <p class="note">
+        这是模拟第三方网站。Phantom widget 验证通过后会拿到 token，浏览器把 token
+        连同用户名一起 POST 给模拟业务后端 <code>/demo/login</code>，后端调用 Phantom
+        的 <code>/consume-token</code> 核销，核销成功才允许登录。
+      </p>
+    </div>
+
+    <!-- ① 引入 Phantom SDK（script-tag 方式接入） -->
+    <script src="/phantom.js"></script>
+    <script>
+      // 配置：Phantom 后端地址。这里同源走 /api（由 nginx 反代到后端），
+      //       或开发态直接指向 http://localhost:8000
+      const PHANTOM_API_BASE = window.PHANTOM_API_BASE || "/api";
+      let phantomToken = null;     // 验证通过后暂存 token
+      let phantomHandle = null;    // mount 返回的 handle
+
+      // ② 挂载 widget
+      phantomHandle = Phantom.mount("#phantom-box", {
+        apiBase: PHANTOM_API_BASE,
+        onSuccess: function (r) {
+          // token 交给【接入方自己】处理 —— 这里只是暂存，登录时提交给业务后端
+          phantomToken = r.token;
+          document.getElementById("login-btn").disabled = false;
+          document.getElementById("msg").textContent =
+            "✅ 验证通过，可点击登录（token 已暂存）";
+        },
+        onFail: function (r) {
+          phantomToken = null;
+          document.getElementById("login-btn").disabled = true;
+          document.getElementById("msg").textContent =
+            "❌ 验证未通过，请重试";
+        },
+        onError: function (e) {
+          document.getElementById("msg").textContent = "⚠️ " + e.message;
+        },
+      });
+
+      // ③ 登录：把 token 发给模拟业务后端核销
+      document.getElementById("login-btn").addEventListener("click", async () => {
+        const username = document.getElementById("username").value;
+        const msg = document.getElementById("msg");
+        msg.textContent = "登录中…";
+        try {
+          const res = await fetch("/demo/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: username, phantomToken: phantomToken }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            msg.style.color = "#4ade80";
+            msg.textContent = "🎉 " + data.message;
+          } else {
+            msg.style.color = "#f87171";
+            msg.textContent = "❌ " + data.reason;
+            // token 失效，重置 widget 重新验证
+            phantomHandle.reset();
+            document.getElementById("login-btn").disabled = true;
+          }
+        } catch (e) {
+          msg.style.color = "#f87171";
+          msg.textContent = "⚠️ " + e.message;
+        }
+      });
+    </script>
+  </body>
+</html>

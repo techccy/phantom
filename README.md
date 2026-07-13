@@ -58,10 +58,12 @@ phantom/
 │       ├── renderer.ts      # 动态显影（视觉防线核心）
 │       ├── tracker.ts       # pointer 轨迹采集
 │       ├── crypto.ts        # Web Crypto ECDH/AES-GCM
-│       ├── api.ts           # /challenge /verify
+│       ├── api.ts           # /challenge /verify /consume-token
 │       ├── antidebug.ts     # devtools 检测 → 死循环
-│       └── main.ts          # 状态机编排
-├── docker-compose.yml       # 便捷启动 Redis
+│       ├── phantom.ts       # SDK 公共入口：Phantom.mount()
+│       ├── styles.ts        # widget 注入式样式
+│       └── main.ts          # 状态机编排（官方 demo 入口）
+├── docker-compose.yml       # 全栈部署：Redis + 后端 + 前端
 └── README.md
 ```
 
@@ -138,3 +140,57 @@ pytest -v                     # 12 个测试：scoring / crypto / api 全链路
 后端 GETDEL challenge（一次性销毁）→ 解密 → 评分 → 签发 token
 业务端 ──token──▶ /consume-token ◀── GETDEL（一票一用）
 ```
+
+## 接入与部署
+
+### 在你的网站里接入 Phantom
+
+Phantom 提供 **script-tag SDK**，接入方引一个 `<script>` + 一个容器 `div` 即可嵌入，
+类似 reCAPTCHA：
+
+```html
+<script src="https://phantom.your-domain.com/phantom.js"></script>
+<div id="phantom-box"></div>
+<script>
+  Phantom.mount("#phantom-box", {
+    apiBase: "https://phantom.your-domain.com",
+    onSuccess: (r) => console.log("token =", r.token),   // 把 token 发给你的后端核销
+    onFail:   (r) => console.log("未通过", r.detail),
+  });
+</script>
+```
+
+> ⚠️ token 是**一次性真人券**，必须由你的业务后端调用 `/consume-token` 核销，**不要
+> 在浏览器侧核销**。完整接入流程（前端嵌入 + 后端核销闭环）见 **[接入文档](./docs/integration.md)**。
+
+### 一键全栈部署（Docker Compose）
+
+```bash
+cp .env.example .env          # 编辑：设置 PHANTOM_CORS_ORIGINS、PHANTOM_TOKEN_SECRET
+docker compose up -d --build  # Redis + 后端 + 前端 nginx，一条命令起全栈
+# http://localhost           → 官方 demo
+# http://localhost/demo.html → 接入示例页
+# https://…/phantom.js       → SDK 包（接入方引用）
+```
+
+生产部署前务必在 `.env` 中设置稳定的 `PHANTOM_TOKEN_SECRET`（`openssl rand -hex 32`）
+和你的网站域名 `PHANTOM_CORS_ORIGINS`。
+
+### 目录结构（接入相关）
+
+```
+phantom/
+├── frontend/
+│   ├── src/phantom.ts       # SDK 公共入口：Phantom.mount() 工厂
+│   ├── src/styles.ts        # 注入式 widget 样式（dark/light 主题）
+│   ├── vite.sdk.config.ts   # SDK 构建：产出 phantom.js（IIFE + 混淆）
+│   ├── public/demo.html     # 模拟第三方接入示例页
+│   ├── Dockerfile           # 前端镜像（node 构建 → nginx 托管 + /api 反代）
+│   └── nginx.conf
+├── backend/Dockerfile       # 后端镜像（多阶段，scipy 编译优化）
+├── examples/mock-biz-server.py  # 模拟接入方业务后端（演示 token 核销闭环）
+├── docker-compose.yml       # 全栈：redis + backend + frontend
+├── .env.example             # Compose 部署环境变量
+└── docs/integration.md      # ★ 面向接入程序员的完整文档
+```
+

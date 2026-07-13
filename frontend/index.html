@@ -2,12 +2,14 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Phantom · 人机验证</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phantom · 人机验证 Demo</title>
     <style>
       :root {
         color-scheme: dark;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
       }
       body {
         margin: 0;
@@ -17,51 +19,36 @@
         align-items: center;
         justify-content: center;
         gap: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         background: #111;
         color: #eee;
       }
-      #stage {
-        width: 480px;
-        height: 480px;
-        max-width: 90vw;
-        max-height: 90vw;
-        border: 1px solid #333;
-        touch-action: none;
-        image-rendering: pixelated;
-      }
-      #activate {
-        width: 200px;
-        height: 56px;
-        font-size: 16px;
+      h1 {
+        font-size: 20px;
         font-weight: 600;
-        border: none;
-        border-radius: 12px;
-        background: #3b82f6;
-        color: #fff;
-        cursor: pointer;
-        user-select: none;
-        touch-action: none;
+        margin: 0;
       }
-      #activate:active {
-        background: #2563eb;
+      .hint {
+        font-size: 13px;
+        color: #888;
+        max-width: 480px;
+        text-align: center;
       }
-      #status {
-        font-size: 14px;
-        color: #aaa;
-        min-height: 1.2em;
-      }
-      #result {
-        font-size: 18px;
-        font-weight: 600;
-        min-height: 1.2em;
+      /* Phantom widget 会自注入 .phantom-widget 样式，这里只给容器一个占位 */
+      #app {
+        background: #161616;
+        border-radius: 16px;
       }
     </style>
   </head>
   <body>
-    <canvas id="stage"></canvas>
-    <button id="activate" type="button">按住跟随方块</button>
-    <div id="status">加载中…</div>
-    <div id="result"></div>
+    <h1>Phantom 人机验证</h1>
+    <p class="hint">
+      这是官方 Demo 页（仅前端流程）。完整接入示例（含后端 token 核销闭环）见
+      <code>demo.html</code> 与接入文档。
+    </p>
+    <!-- Phantom widget 将挂载到这里 -->
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

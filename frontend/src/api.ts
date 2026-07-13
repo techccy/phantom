@@ -1,7 +1,9 @@
-// API 客户端：/challenge 与 /verify。
+// API 客户端：/challenge /verify /consume-token。
 // 时效强约束：采集结束【立即】提交，本地不缓存可重放数据（手册 §四 时效校验）。
-
-import { CONFIG } from "./config";
+//
+// 注意：apiBase 以参数形式传入，不再依赖全局 CONFIG。这样同一个页面可挂载多个
+// 指向不同后端的 widget 实例（多实例隔离），也便于 SDK 在宿主页面运行时由接入方
+// 显式指定后端地址。
 
 export interface ChallengePayload {
   challengeId: string;
@@ -17,8 +19,9 @@ export interface VerifyResult {
   detail: Record<string, unknown>;
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${CONFIG.apiBase}${path}`, {
+async function postJson<T>(apiBase: string, path: string, body: unknown): Promise<T> {
+  const base = apiBase.replace(/\/+$/, "");
+  const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -30,18 +33,25 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function requestChallenge(clientPublicJwk: JsonWebKey): Promise<ChallengePayload> {
-  return postJson("/challenge", { clientPublicJwk });
+export function requestChallenge(
+  apiBase: string,
+  clientPublicJwk: JsonWebKey,
+): Promise<ChallengePayload> {
+  return postJson(apiBase, "/challenge", { clientPublicJwk });
 }
 
 export function submitVerify(
+  apiBase: string,
   challengeId: string,
   iv: string,
   ciphertext: string,
 ): Promise<VerifyResult> {
-  return postJson("/verify", { challengeId, iv, ciphertext });
+  return postJson(apiBase, "/verify", { challengeId, iv, ciphertext });
 }
 
-export function consumeToken(token: string): Promise<{ valid: boolean }> {
-  return postJson("/consume-token", { token });
+export function consumeToken(
+  apiBase: string,
+  token: string,
+): Promise<{ valid: boolean }> {
+  return postJson(apiBase, "/consume-token", { token });
 }

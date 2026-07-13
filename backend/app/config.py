@@ -30,7 +30,11 @@ def _env_float(name: str, default: float) -> float:
 REDIS_URL: str = os.environ.get("PHANTOM_REDIS_URL", "redis://localhost:6379/0")
 CORS_ORIGINS: list[str] = [
     o.strip()
-    for o in os.environ.get("PHANTOM_CORS_ORIGINS", "http://localhost:5173").split(",")
+    for o in os.environ.get(
+        "PHANTOM_CORS_ORIGINS",
+        # 默认放开本地开发的几个常用源：前端 dev server、官方 demo、接入 demo
+        "http://localhost:5173,http://localhost:8088,http://localhost",
+    ).split(",")
     if o.strip()
 ]
 

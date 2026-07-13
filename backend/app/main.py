@@ -20,7 +20,8 @@ app = FastAPI(title="Phantom", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
-    allow_methods=["POST"],
+    # OPTIONS 必须放开以处理浏览器跨域预检（CORS preflight）
+    allow_methods=["POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
