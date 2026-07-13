@@ -80,7 +80,7 @@ docker compose up -d redis
 
 ```bash
 cd backend
-python -m venv .venv && . .venv/bin/activate
+python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env          # 按需修改
 uvicorn app.main:app --reload --port 8000

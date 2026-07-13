@@ -7,15 +7,17 @@ from pydantic import BaseModel, Field
 
 
 # ---- /challenge ----
+# JWK 成员值可为 str / bool / list 等（RFC 7517），浏览器 exportKey 会附带
+# ext(bool)、key_ops(list) 等字段，故以 dict[str, Any] 接收；后端只取 kty/crv/x/y。
 class ChallengeRequest(BaseModel):
-    clientPublicJwk: dict[str, str] = Field(
+    clientPublicJwk: dict[str, Any] = Field(
         ..., description="前端 ECDH P-256 临时公钥 JWK"
     )
 
 
 class ChallengeResponse(BaseModel):
     challengeId: str
-    serverPublicJwk: dict[str, str]
+    serverPublicJwk: dict[str, Any]
     salt: str
     encryptedParams: dict[str, str]
 
