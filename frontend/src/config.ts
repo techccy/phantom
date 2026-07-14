@@ -4,7 +4,7 @@ export const CONFIG = {
   apiBase: import.meta.env.VITE_API_BASE ?? "/api",
   canvasWidth: 480,
   canvasHeight: 480,
-  challengeDurationMs: 3000,
+  challengeDurationMs: 5000,
   targetFps: 60,
   // 渲染参数
   noiseDensity: 0.55, // 画布噪点覆盖率

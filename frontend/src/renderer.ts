@@ -149,11 +149,12 @@ export class PhantomRenderer {
         p.y <= targetBottom;
 
       if (inTarget) {
-        // 共同命运：区域内粒子按 Δ 平移（相干运动 → 时间积分显影）
-        p.x += delta[0];
-        p.y += delta[1];
+        // 区域内也每帧在方块内重随机位置（与背景同分布 → 密度一致），
+        // 再施加共同 Δ，保留"共同命运（Common Fate）"显影。
+        p.x = targetLeft + Math.random() * (targetRight - targetLeft) + delta[0];
+        p.y = targetTop + Math.random() * (targetBottom - targetTop) + delta[1];
         // 亮度小幅共同调制，增强显影但单帧仍类噪点
-        p.bright = 0.5 + 0.5 * Math.sin(performance.now() * 0.02 + i);
+        p.bright = 0.5 + 0.5 * Math.random();
       } else {
         // 背景高熵：位置/亮度每帧完全重随机 → 单帧纯噪点
         p.x = Math.random() * w;
@@ -176,11 +177,8 @@ export class PhantomRenderer {
     ctx.putImageData(img, 0, 0);
   }
 
-  /** 暂停 → 立即退化为纯噪点（PRD：静态无效）。 */
-  pause(): void {
-    this.running = false;
-    cancelAnimationFrame(this.rafId);
-    // 重画一帧纯随机噪点，确保无残留目标信息
+  /** 画一帧纯随机噪点（无残留目标信息）。暂停态 / 初始态共用。 */
+  drawStaticNoise(): void {
     const { ctx } = this;
     const w = CONFIG.canvasWidth;
     const h = CONFIG.canvasHeight;
@@ -194,6 +192,13 @@ export class PhantomRenderer {
       data[i + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
+  }
+
+  /** 暂停 → 立即退化为纯噪点（PRD：静态无效）。 */
+  pause(): void {
+    this.running = false;
+    cancelAnimationFrame(this.rafId);
+    this.drawStaticNoise();
   }
 
   stop(): void {

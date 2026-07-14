@@ -45,7 +45,7 @@ TOKEN_TTL_SECONDS: int = _env_int("PHANTOM_TOKEN_TTL", 300)
 # 画布（与前端约定，仅作为路径生成与归一化参考，可被 challenge 覆盖）
 CANVAS_WIDTH: int = _env_int("PHANTOM_CANVAS_W", 480)
 CANVAS_HEIGHT: int = _env_int("PHANTOM_CANVAS_H", 480)
-CHALLENGE_DURATION_SECONDS: float = _env_float("PHANTOM_CHALLENGE_DURATION", 3.0)
+CHALLENGE_DURATION_SECONDS: float = _env_float("PHANTOM_CHALLENGE_DURATION", 5.0)
 
 # ---- 时效（手册 §四.2：防止离线慢算）----
 MAX_DRIFT_SECONDS: float = _env_float("PHANTOM_MAX_DRIFT_SECONDS", 3.0)

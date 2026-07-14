@@ -114,10 +114,10 @@ class WidgetSession {
       this.renderer = new PhantomRenderer(this.canvas, params);
       this.tracker = new TrajectoryTracker(this.canvas);
 
-      // 启动动态显影
+      // 题目就绪：先画一帧静态噪点，等用户按住按钮再开始动态显影
       this.status.textContent = "按住下方按钮，跟随移动的方块";
       this.activateBtn.disabled = false;
-      this.renderer.start();
+      this.renderer.drawStaticNoise();
       this.bindInteraction();
     } catch (e) {
       this.onError(e as Error);
@@ -129,12 +129,16 @@ class WidgetSession {
     const onDown = (): void => {
       if (this.collecting || this.finished) return;
       this.collecting = true;
+      // 用户按下才启动动态显影（startTime 重置为按下时刻，t 从 0 走）
+      this.renderer?.start();
       this.tracker?.start();
       this.status.textContent = "跟随方块移动…";
     };
     const onUp = (): void => {
       if (!this.collecting || this.finished) return;
       this.collecting = false;
+      // 松手即停：退化为纯噪点（滑块不再移动）
+      this.renderer?.pause();
       const samples = this.tracker?.stop() ?? [];
       void this.verifyAndFinish(samples);
     };
