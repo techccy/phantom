@@ -1,14 +1,14 @@
 // 视觉防线核心：动态显影（手册 §一、§二）。
 //
-// 原理：每帧画布铺满高熵随机噪点粒子；背景粒子位置/亮度每帧完全重随机
-// （帧间不相关）→ 单帧即纯噪点，机器截图送 VLM 拿到的是一团乱麻。
-// 而目标方块区域内的粒子，在帧间被施加一个【共同位移向量 Δ】（沿贝塞尔
-// 路径推进量），实现"共同命运（Common Fate）"——人眼视网膜时间积分显影，
-// 机器逐帧分析失效。
+// 原理：每帧画布铺满高熵随机噪点粒子；目标方块区域内的粒子在帧间被施加一个
+// 【共同位移向量 Δ】（沿贝塞尔路径推进量），实现"共同命运（Common Fate）"——
+// 人眼视网膜时间积分显影，机器逐帧分析失效。
 //
-// 关键：暂停（暂停渲染循环）→ 立即退化成纯噪点，符合 PRD"静态无效"。
+// 关键：暂停（停止渲染循环）→ 立即退化成纯噪点，符合 PRD"静态无效"。
+// 关键：动态帧与静态帧背景采用【同一套逐像素随机噪点】→ 按下/松开无明暗跳变，
+//   避免"一按住就变暗"的密度落差（背景密度两条路径必须一致）。
 //
-// 反密度分析：粒子亮度随机闪烁 + 区域内外密度扰动，防像素密度抠图。
+// 反密度分析：目标簇亮度随机闪烁 + 少量粒子随机丢弃，防像素密度抠图。
 
 import { CONFIG } from "./config";
 
@@ -17,15 +17,6 @@ export interface BezierParams {
   duration: number; // 秒
   fps: number;
   targetHalf: number; // 目标方块半边长
-}
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number; // 帧间位移（仅目标区域内粒子使用，作为"共同命运"载体）
-  vy: number;
-  bright: number; // 0..1
-  inTarget: boolean;
 }
 
 /** 三次贝塞尔位置采样。 */
@@ -47,24 +38,13 @@ function bezierAt(
   return [x, y];
 }
 
-/** 由路径与时间推进计算本帧目标中心位移向量 Δ。 */
-function targetDelta(
-  cp: [number, number][],
-  tPrev: number,
-  tCurr: number,
-): { center: [number, number]; delta: [number, number] } {
-  const [px, py] = bezierAt(cp, tPrev);
-  const [cx, cy] = bezierAt(cp, tCurr);
-  return { center: [cx, cy], delta: [cx - px, cy - py] };
-}
-
 export class PhantomRenderer {
   private ctx: CanvasRenderingContext2D;
-  private particles: Particle[] = [];
   private rafId = 0;
   private running = false;
   private startTime = 0;
-  private lastT = 0;
+  /** 目标方块内每帧铺多少亮粒子（按方块面积比例，承载"共同命运"显影）。 */
+  private readonly targetParticleCount: number;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -73,25 +53,21 @@ export class PhantomRenderer {
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("Canvas 2D 不可用");
     this.ctx = ctx;
-    this.seedParticles();
+    const boxArea = (2 * params.targetHalf) ** 2;
+    this.targetParticleCount = Math.max(64, Math.floor(boxArea * 0.6));
   }
 
-  /** 初始化全屏随机噪点粒子。 */
-  private seedParticles(): void {
-    const { canvasWidth: w, canvasHeight: h, noiseDensity } = CONFIG;
-    const count = Math.floor(w * h * noiseDensity * 0.01);
-    this.particles = new Array(count).fill(0).map(() => this.randomParticle());
-  }
-
-  private randomParticle(): Particle {
-    return {
-      x: Math.random() * CONFIG.canvasWidth,
-      y: Math.random() * CONFIG.canvasHeight,
-      vx: 0,
-      vy: 0,
-      bright: Math.random(),
-      inTarget: false,
-    };
+  /** 用逐像素随机灰度铺满整个 ImageData。
+   * 静态帧（drawStaticNoise）与动态帧背景共用 → 两条路径密度完全一致，
+   * 消除"按下瞬间背景变暗"的跳变。 */
+  private paintFullNoise(data: Uint8ClampedArray): void {
+    for (let i = 0; i < data.length; i += 4) {
+      const v = (Math.random() * 255) | 0;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+      data[i + 3] = 255;
+    }
   }
 
   /** 启动动态渲染循环。返回目标当前位置（用于 UI 指引，可选）。 */
@@ -99,7 +75,6 @@ export class PhantomRenderer {
     if (this.running) return;
     this.running = true;
     this.startTime = performance.now();
-    this.lastT = 0;
     const loop = (now: number) => {
       if (!this.running) return;
       const elapsed = (now - this.startTime) / 1000;
@@ -122,52 +97,30 @@ export class PhantomRenderer {
     const w = CONFIG.canvasWidth;
     const h = CONFIG.canvasHeight;
 
-    // 1) 清屏（深底，提升噪点对比）
-    ctx.fillStyle = "#0a0a0a";
-    ctx.fillRect(0, 0, w, h);
-
-    // 2) 计算本帧目标中心与位移向量 Δ（共同命运载体）
-    const { center, delta } = targetDelta(this.params.controlPoints, this.lastT, t);
-    const half = params.targetHalf;
-    this.lastT = t;
-
-    // 3) 遍历粒子：背景粒子完全重随机；目标区域内粒子施加共同 Δ
-    //    用 ImageData 批量写入以达 60fps（逐粒子 fillRect 太慢）。
+    // 一次 createImageData，背景与目标簇写入同一缓冲后统一落盘（60fps 友好）
     const img = ctx.createImageData(w, h);
     const data = img.data;
-    const targetLeft = center[0] - half;
-    const targetRight = center[0] + half;
-    const targetTop = center[1] - half;
-    const targetBottom = center[1] + half;
 
-    for (let i = 0; i < this.particles.length; i++) {
-      const p = this.particles[i];
-      const inTarget =
-        p.x >= targetLeft &&
-        p.x <= targetRight &&
-        p.y >= targetTop &&
-        p.y <= targetBottom;
+    // 1) 背景：逐像素随机噪点（与 drawStaticNoise 同密度）→ 单帧即纯噪点，
+    //    且与静态帧无明暗跳变
+    this.paintFullNoise(data);
 
-      if (inTarget) {
-        // 区域内也每帧在方块内重随机位置（与背景同分布 → 密度一致），
-        // 再施加共同 Δ，保留"共同命运（Common Fate）"显影。
-        p.x = targetLeft + Math.random() * (targetRight - targetLeft) + delta[0];
-        p.y = targetTop + Math.random() * (targetBottom - targetTop) + delta[1];
-        // 亮度小幅共同调制，增强显影但单帧仍类噪点
-        p.bright = 0.5 + 0.5 * Math.random();
-      } else {
-        // 背景高熵：位置/亮度每帧完全重随机 → 单帧纯噪点
-        p.x = Math.random() * w;
-        p.y = Math.random() * h;
-        p.bright = Math.random();
-      }
+    // 2) 目标方块：在当前贝塞尔中心周围铺密集亮粒子，承载"共同命运"显影。
+    //    中心逐帧沿贝塞尔推进 → 整簇共同位移 → 人眼积分成"移动的方块"。
+    const center = bezierAt(params.controlPoints, t);
+    const half = params.targetHalf;
+    const left = center[0] - half;
+    const top = center[1] - half;
+    const size = 2 * half;
+
+    for (let i = 0; i < this.targetParticleCount; i++) {
       // 反密度分析：少量粒子随机丢弃，破坏密度统计
       if (Math.random() < 0.05) continue;
-
-      const px = p.x | 0;
-      const py = p.y | 0;
+      const px = (left + Math.random() * size) | 0;
+      const py = (top + Math.random() * size) | 0;
       if (px < 0 || px >= w || py < 0 || py >= h) continue;
-      const v = (p.bright * 255) | 0;
+      // 亮度共同调制：偏高且小幅闪烁，单帧仍类噪点，帧间积分显出方块
+      const v = ((0.55 + 0.45 * Math.random()) * 255) | 0;
       const idx = (py * w + px) * 4;
       data[idx] = v;
       data[idx + 1] = v;
@@ -183,14 +136,7 @@ export class PhantomRenderer {
     const w = CONFIG.canvasWidth;
     const h = CONFIG.canvasHeight;
     const img = ctx.createImageData(w, h);
-    const data = img.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const v = (Math.random() * 255) | 0;
-      data[i] = v;
-      data[i + 1] = v;
-      data[i + 2] = v;
-      data[i + 3] = 255;
-    }
+    this.paintFullNoise(img.data);
     ctx.putImageData(img, 0, 0);
   }
 

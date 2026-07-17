@@ -155,9 +155,13 @@ class WidgetSession {
 
   private async verifyAndFinish(samples: [number, number, number][]): Promise<void> {
     if (!this.sessionKey) return;
+    // 采样点时间戳用 performance.now()（单调高精度，仅相对时差参与 DSP 重采样），
+    // 但防重放时效字段 lastPointT_ms 必须与后端 epoch 对齐——后端拿
+    // time.time()*1000 与之比对，传 performance.now() 会被误判 timeout_drift、
+    // 导致真实轨迹恒得 0.0 分。故此处用 Date.now()（epoch 毫秒）。
     const payload = {
       points: samples,
-      lastPointT_ms: samples.length ? samples[samples.length - 1][2] : 0,
+      lastPointT_ms: Date.now(),
     };
     const plaintext = new TextEncoder().encode(JSON.stringify(payload));
     const { iv, ciphertext } = await encrypt(this.sessionKey, plaintext);
