@@ -204,3 +204,10 @@ phantom/
 └── docs/integration.md      # ★ 面向接入程序员的完整文档
 ```
 
+---
+
+Buy me a coffee ~
+
+![donate](static/donate.png)
+
+![donate](static/donate_alipay.jpg)
