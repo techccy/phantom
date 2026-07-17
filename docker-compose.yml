@@ -41,7 +41,7 @@ services:
     container_name: phantom-frontend
     depends_on: [backend]
     ports:
-      - "80:80"
+      - "5173:80"
     restart: unless-stopped
     networks: [phantom-net]
 

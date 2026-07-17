@@ -72,6 +72,12 @@ phantom/
 
 ## 快速开始
 
+### Docker一键部署
+
+```docker compose up -d --build```
+
+### 手动部署
+
 ### 1. 启动 Redis
 
 ```bash
