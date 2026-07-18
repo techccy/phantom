@@ -25,6 +25,7 @@ import {
   encrypt,
   generateClientKeyPair,
   importServerPublic,
+  type SessionKey,
 } from "./crypto";
 import { installAntidebug } from "./antidebug";
 import { PhantomRenderer, type BezierParams } from "./renderer";
@@ -70,7 +71,7 @@ function resolveContainer(el: string | HTMLElement): HTMLElement {
 class WidgetSession {
   private renderer: PhantomRenderer | null = null;
   private tracker: TrajectoryTracker | null = null;
-  private sessionKey: CryptoKey | null = null;
+  private sessionKey: SessionKey | null = null;
   private challengeId = "";
   private collecting = false;
   private finished = false;
