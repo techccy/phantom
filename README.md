@@ -264,3 +264,7 @@ phantom/
 ![donate](static/donate.png)
 
 ![donate](static/donate_alipay.jpeg)
+
+---
+
+如果商业公司需要闭源使用，或不想受到 AGPL 协议的开源传染约束，请[联系我](mailto:ccy@techccy.com)购买商业授权.

@@ -261,3 +261,7 @@ phantom/
 ![donate](static/donate.png)
 
 ![donate](static/donate_alipay.jpeg)
+
+---
+
+If a commercial company requires closed-source usage or wishes to avoid the "copyleft" constraints of the AGPL license, please [contact me](mailto:ccy@techccy.com) to purchase a commercial license.
