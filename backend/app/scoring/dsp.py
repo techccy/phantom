@@ -146,14 +146,14 @@ def extract_bio_features(
     accel_pick = ax if np.var(ax) >= np.var(ay) else ay
     zc = zerocrossings(accel_pick)
 
-    bx = bandpass(rx, 8.0, 12.0, fs)
-    by = bandpass(ry, 8.0, 12.0, fs)
+    bx = bandpass(rx, config.TREMOR_LO_HZ, config.TREMOR_HI_HZ, fs)
+    by = bandpass(ry, config.TREMOR_LO_HZ, config.TREMOR_HI_HZ, fs)
     tremor_amp = max(
         float(np.sqrt(np.mean(bx**2))) if bx.size else 0.0,
         float(np.sqrt(np.mean(by**2))) if by.size else 0.0,
     )
-    psd_ratio = max(band_power_ratio(rx, fs, 8.0, 12.0),
-                    band_power_ratio(ry, fs, 8.0, 12.0))
+    psd_ratio = max(band_power_ratio(rx, fs, config.TREMOR_LO_HZ, config.TREMOR_HI_HZ),
+                    band_power_ratio(ry, fs, config.TREMOR_LO_HZ, config.TREMOR_HI_HZ))
 
     return BioFeatures(
         residual_energy=residual_energy,

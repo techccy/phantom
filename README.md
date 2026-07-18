@@ -22,9 +22,11 @@
 ## 核心判定（手册 §四）
 
 ```
-Composite = 0.6 · S_DTW + 0.4 · S_Bio        阈值 0.8
-S_Bio     = 0.35·energy + 0.30·zc + 0.35·tremor
+Composite = W_DTW · S_DTW + W_BIO · S_Bio              默认 0.6 / 0.4，阈值 0.8
+S_Bio     = W_JERK·energy + W_ZC·zc + W_PSD·tremor      默认 0.4 / 0.3 / 0.3
 ```
+
+> 上述权重、阈值、频段、能量/零交叉边界**全部可通过环境变量调整**（见下方「配置项」）。
 
 - **S_DTW**：实际轨迹与后端下发贝塞尔路径的 DTW 距离（方向拟合度）
 - **S_Bio**：在 4 阶双向巴特沃斯低通（截止 7Hz）后的**残差**上度量
@@ -125,19 +127,69 @@ pytest -v                     # 12 个测试：scoring / crypto / api 全链路
 - **密码学**：ECDH 双方派生一致、AES-GCM 往返与篡改检测、token 签发/校验
 - **API**：全链路通过、一题一答（第二次 verify 返回 410）、3s 时效拦截、非法曲线拒绝、token 一票一用
 
-## 配置项（关键）
+## 配置项
+
+所有可调参数集中在 `.env`（见 `.env.example` / `backend/.env.example`）。
+
+- **后端 `PHANTOM_*`**：改完重启 backend 容器即生效（`docker compose up -d`）
+- **前端 `VITE_*`**：属 Vite 构建时注入，改后必须 `docker compose up -d --build` 重 build 前端镜像
+- **画布尺寸**只改 `PHANTOM_CANVAS_W/H` —— 后端按它生成路径、前端 `VITE_CANVAS_W/H` 从同一变量取值，保证两者一致（否则路径出界）
+
+### 基础 / 安全
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `PHANTOM_REDIS_URL` | `redis://localhost:6379/0` | Redis 连接 |
-| `PHANTOM_CHALLENGE_DURATION` | `5.0` | 方块沿贝塞尔路径的移动时长（秒）—— 决定跟随难度与速度 |
-| `PHANTOM_MAX_DRIFT_SECONDS` | `3.0` | 提交时效上限：`last_point_t` 距 now 的最大允许偏移（手册 §四.2，防离线慢算） |
-| `PHANTOM_PASS_THRESHOLD` | `0.8` | 综合评分通过阈值 |
-| `PHANTOM_SMOOTHNESS_EPS` | `0.08` | 残差能量平滑否决线 (px) |
-| `PHANTOM_BUTTER_CUTOFF` | `7.0` | 巴特沃斯截止频率 (Hz) |
-| `PHANTOM_TOKEN_SECRET` | 进程随机 | token HMAC 密钥（生产必注入） |
+| `PHANTOM_CORS_ORIGINS` | 本地三源 | 允许的前端来源（逗号分隔，接入方网站源都要加） |
+| `PHANTOM_TOKEN_SECRET` | 进程随机 | token HMAC 密钥（生产必注入 `openssl rand -hex 32`） |
+| `PHANTOM_CHALLENGE_TTL` / `PHANTOM_TOKEN_TTL` | 120 / 300 | challenge / token 生命周期（秒） |
+| `PHANTOM_MAX_DRIFT_SECONDS` | `3.0` | 提交时效上限：`last_point_t` 距 now 最大偏移（防离线慢算） |
+| `PHANTOM_CLOCK_SKEW_MS` | `1500` | 前后端时钟漂移容差（毫秒） |
 
-完整列表见 `backend/.env.example` 与 `backend/app/config.py`。
+### 画布 / 难度
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `PHANTOM_CANVAS_W` / `PHANTOM_CANVAS_H` | `480` / `480` | 画布尺寸（单一来源，前端 `VITE_CANVAS_*` 同步取值） |
+| `PHANTOM_CHALLENGE_DURATION` | `5.0` | 方块沿贝塞尔路径移动时长（秒）—— 决定速度与难度 |
+| `PHANTOM_TARGET_HALF` | `22` | 目标方块半边长（画布相对） |
+| `PHANTOM_FPS` | `60` | 帧率（仅约定下发） |
+
+### 评分权重
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `PHANTOM_PASS_THRESHOLD` | `0.8` | 综合评分通过阈值 |
+| `PHANTOM_W_DTW` / `PHANTOM_W_BIO` | `0.6` / `0.4` | Composite 权重；调大 W_DTW 偏向"跟得准" |
+| `PHANTOM_W_JERK` / `PHANTOM_W_ZC` / `PHANTOM_W_PSD` | `0.4` / `0.3` / `0.3` | S_Bio 内部权重（能量 / 零交叉 / 震颤） |
+| `PHANTOM_DTW_D_REF_RATIO` | `0.15` | DTW 衰减尺度（越大越宽松；每点偏差占对角线此比例时 S≈0.37） |
+| `PHANTOM_SMOOTHNESS_EPS` / `_CAP` / `_BIO` | `0.08` / `0.20` / `0.05` | 平滑否决线 / Composite 封顶 / 否决态 S_Bio |
+
+### DSP / 生理特征阈值
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `PHANTOM_DSP_FS` | `100` | 上采样目标频率（Hz） |
+| `PHANTOM_BUTTER_ORDER` / `PHANTOM_BUTTER_CUTOFF` | `4` / `7.0` | 巴特沃斯阶数 / 截止频率（Hz） |
+| `PHANTOM_TREMOR_LO_HZ` / `PHANTOM_TREMOR_HI_HZ` | `8.0` / `12.0` | 生理震颤频段（Hz） |
+| `PHANTOM_ENERGY_MIN/LOW/HIGH/MAX` | `0.1/0.3/8.0/20.0` | 残差能量边界（px）；LOW~HIGH 生理区间 |
+| `PHANTOM_ZC_FLOOR/RISE/PLATEAU/DROP` | `1.0/1.67/15.0/40.0` | 加速度零交叉率边界（次/秒）；RISE~PLATEAU 满分 |
+| `PHANTOM_TREMOR_AMP_MIN/LOW/HIGH/MAX` | `0.05/0.3/8.0/20.0` | 震颤振幅边界（px） |
+| `PHANTOM_TREMOR_PSD_MIN/LOW/MID` | `0.02/0.4/0.13` | 震颤频谱占比段 |
+| `PHANTOM_W_TREMOR_AMP` / `PHANTOM_W_TREMOR_PSD` | `0.5` / `0.5` | tremor 子分内部权重 |
+| `PHANTOM_MIN_POINTS` | `30` | 轨迹有效点数下限 |
+
+### 前端渲染参数（Vite 构建时注入，改后需 `--build`）
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `VITE_API_BASE` | `/api` | 后端地址（生产可设独立域名） |
+| `VITE_PARTICLE_DENSITY` | `0.6` | 目标方块每像素铺的亮粒子比例（越大越密） |
+| `VITE_PARTICLE_DROP_RATE` | `0.05` | 反密度分析：每帧随机丢弃粒子比例 |
+| `VITE_PARTICLE_BRIGHTNESS` | `0.55` | 目标簇亮度基值（0~1） |
+| `VITE_PARTICLE_BRIGHTNESS_VAR` | `0.45` | 亮度随机闪烁幅度 |
+
+> 前端 `VITE_*` 非法或缺失时回退默认值；非法 `PHANTOM_*` 同样回退（不影响启动）。
 
 ## 数据流
 

@@ -12,9 +12,6 @@ import uuid
 
 from . import config, crypto
 
-# 目标方块尺寸（画布相对）
-TARGET_HALF = 22
-
 
 def _random_point_in_canvas(w: int, h: int, margin: int = 40) -> tuple[float, float]:
     return (
@@ -61,14 +58,14 @@ def create_challenge(
     challenge_id = str(uuid.uuid4())
     control_points = generate_bezier_path(canvas_w, canvas_h)
     noise_seed = secrets.token_bytes(16).hex()
-    fps = 60
+    fps = config.FPS
 
     params = {
         "canvas": {"w": canvas_w, "h": canvas_h},
         "duration": duration,
         "fps": fps,
         "controlPoints": control_points,
-        "targetHalf": TARGET_HALF,
+        "targetHalf": config.TARGET_HALF,
         "noiseSeed": noise_seed,
     }
     plaintext = json.dumps(params, separators=(",", ":")).encode()

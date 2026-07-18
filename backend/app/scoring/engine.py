@@ -37,19 +37,19 @@ class ScoreBreakdown:
 
 
 def _energy_score(residual_energy: float) -> float:
-    """残差能量映射。过小(<0.1px)≈过度平滑→0；落入 0.3~8px 生理区间→高；
-    过大(>20px)≈粗糙人工噪声→急剧归零。
+    """残差能量映射。过小(<ENERGY_MIN)≈过度平滑→0；落入 ENERGY_LOW~HIGH 生理区间→高；
+    过大(>ENERGY_MAX)≈粗糙人工噪声→急剧归零。
 
     手册 §三.3：人类高频微抖 0.3~8px；完美机器 <0.05px；粗糙机器 >20px。
     """
-    if residual_energy < 0.1:
+    if residual_energy < config.ENERGY_MIN:
         return 0.0
-    if residual_energy < 0.3:
-        return (residual_energy - 0.1) / 0.2  # 0→1 缓升
-    if residual_energy <= 8.0:
+    if residual_energy < config.ENERGY_LOW:
+        return (residual_energy - config.ENERGY_MIN) / (config.ENERGY_LOW - config.ENERGY_MIN)  # 0→1 缓升
+    if residual_energy <= config.ENERGY_HIGH:
         return 1.0
-    if residual_energy <= 20.0:
-        return 1.0 - (residual_energy - 8.0) / (20.0 - 8.0)  # 1→0 线性衰减
+    if residual_energy <= config.ENERGY_MAX:
+        return 1.0 - (residual_energy - config.ENERGY_HIGH) / (config.ENERGY_MAX - config.ENERGY_HIGH)  # 1→0 线性衰减
     return 0.0
 
 
@@ -58,41 +58,41 @@ def _zc_score(zc: int, duration_s: float) -> float:
 
     人类：3 秒拖拽 ≥5 次（反馈纠偏循环），但不会上百次。
     机器：≤1 次（过度平滑），或异常高（宽带白噪符号随机翻转，≈fs 级）。
-    → 钟形映射：[5, 40] 次区间满分，过低/过高都降权。
+    → 钟形映射：[ZC_RISE, ZC_PLATEAU] 次区间满分，过低/过高都降权。
     """
     rate = zc / max(duration_s, 1e-3)  # 次/秒
-    if rate < 1.0:
+    if rate < config.ZC_FLOOR:
         return 0.0
-    if rate < 1.67:  # <5 次/3秒
-        return (rate - 1.0) / 0.67 * 0.5
-    if rate <= 15.0:  # 5~15 次/秒：人类反馈纠偏区间
+    if rate < config.ZC_RISE:
+        return (rate - config.ZC_FLOOR) / (config.ZC_RISE - config.ZC_FLOOR) * 0.5
+    if rate <= config.ZC_PLATEAU:  # 人类反馈纠偏区间
         return 1.0
-    if rate <= 40.0:  # 缓降
-        return 1.0 - (rate - 15.0) / 25.0 * 0.5
-    return 0.0  # >40 次/秒：白噪式翻转，判机器
+    if rate <= config.ZC_DROP:  # 缓降
+        return 1.0 - (rate - config.ZC_PLATEAU) / (config.ZC_DROP - config.ZC_PLATEAU) * 0.5
+    return 0.0  # >ZC_DROP：白噪式翻转，判机器
 
 
 def _tremor_score(amp: float, ratio: float) -> float:
-    """8-12Hz 震颤综合：振幅(生理区间) + 频谱占比。"""
+    """生理频段震颤综合：振幅(生理区间) + 频谱占比。"""
     # 振幅子分
-    if amp < 0.05:
+    if amp < config.TREMOR_AMP_MIN:
         amp_s = 0.0
-    elif amp <= 0.3:
-        amp_s = 0.3 * (amp / 0.3)
-    elif amp <= 8.0:
+    elif amp <= config.TREMOR_AMP_LOW:
+        amp_s = 0.3 * (amp / config.TREMOR_AMP_LOW)
+    elif amp <= config.TREMOR_AMP_HIGH:
         amp_s = 1.0
-    elif amp <= 20.0:
-        amp_s = 1.0 - (amp - 8.0) / (20.0 - 8.0) * 0.7
+    elif amp <= config.TREMOR_AMP_MAX:
+        amp_s = 1.0 - (amp - config.TREMOR_AMP_HIGH) / (config.TREMOR_AMP_MAX - config.TREMOR_AMP_HIGH) * 0.7
     else:
         amp_s = 0.3
-    # 功率占比子分：8-12Hz 占比 0.05~0.4 为健康；过低(无结构)/过高(人工窄带)降权
-    if ratio <= 0.02:
-        ratio_s = ratio / 0.02 * 0.5
-    elif ratio <= 0.4:
-        ratio_s = min(1.0, 0.5 + (ratio - 0.02) / 0.13 * 0.5)
+    # 功率占比子分：占比 TREMOR_PSD_MIN~TREMOR_PSD_LOW 为健康；过低(无结构)/过高(人工窄带)降权
+    if ratio <= config.TREMOR_PSD_MIN:
+        ratio_s = ratio / config.TREMOR_PSD_MIN * 0.5
+    elif ratio <= config.TREMOR_PSD_LOW:
+        ratio_s = min(1.0, 0.5 + (ratio - config.TREMOR_PSD_MIN) / config.TREMOR_PSD_MID * 0.5)
     else:
-        ratio_s = max(0.0, 0.8 - (ratio - 0.4))
-    return 0.5 * amp_s + 0.5 * ratio_s
+        ratio_s = max(0.0, 0.8 - (ratio - config.TREMOR_PSD_LOW))
+    return config.W_TREMOR_AMP * amp_s + config.W_TREMOR_PSD * ratio_s
 
 
 def score_trajectory(
@@ -146,7 +146,7 @@ def score_trajectory(
     # 3) DTW 方向拟合（在低通自愿运动上）
     user_xy = np.column_stack([fx, fy])
     bezier_pts = dtw.sample_bezier(bezier_control_points, num=256)
-    s_dtw = dtw.score_dtw(user_xy, bezier_pts, canvas_w, canvas_h)
+    s_dtw = dtw.score_dtw(user_xy, bezier_pts, canvas_w, canvas_h, d_ref_ratio=config.DTW_D_REF_RATIO)
 
     composite = config.W_DTW * s_dtw + config.W_BIO * s_bio
     if smoothness_veto:

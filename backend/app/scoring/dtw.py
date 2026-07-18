@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .. import config
+
 
 def dtw_distance_2d(a: np.ndarray, b: np.ndarray) -> float:
     """2D 点序列 DTW 距离（欧氏局部代价）。
@@ -60,11 +62,11 @@ def score_dtw(
     bezier_points: np.ndarray,
     canvas_w: float,
     canvas_h: float,
-    d_ref_ratio: float = 0.15,
+    d_ref_ratio: float = config.DTW_D_REF_RATIO,
 ) -> float:
     """S_DTW：DTW 平均距离 / 对角线，指数饱和映射到 [0,1]。
 
-    d_ref_ratio 控制衰减尺度——平均每点偏差占对角线 15% 时 S≈0.37。
+    d_ref_ratio 控制衰减尺度——平均每点偏差占对角线 d_ref_ratio 时 S≈0.37。
     """
     diag = float(np.hypot(canvas_w, canvas_h))
     if diag <= 0:

@@ -54,7 +54,7 @@ export class PhantomRenderer {
     if (!ctx) throw new Error("Canvas 2D 不可用");
     this.ctx = ctx;
     const boxArea = (2 * params.targetHalf) ** 2;
-    this.targetParticleCount = Math.max(64, Math.floor(boxArea * 0.6));
+    this.targetParticleCount = Math.max(64, Math.floor(boxArea * CONFIG.particleDensity));
   }
 
   /** 用逐像素随机灰度铺满整个 ImageData。
@@ -115,12 +115,12 @@ export class PhantomRenderer {
 
     for (let i = 0; i < this.targetParticleCount; i++) {
       // 反密度分析：少量粒子随机丢弃，破坏密度统计
-      if (Math.random() < 0.05) continue;
+      if (Math.random() < CONFIG.particleDropRate) continue;
       const px = (left + Math.random() * size) | 0;
       const py = (top + Math.random() * size) | 0;
       if (px < 0 || px >= w || py < 0 || py >= h) continue;
       // 亮度共同调制：偏高且小幅闪烁，单帧仍类噪点，帧间积分显出方块
-      const v = ((0.55 + 0.45 * Math.random()) * 255) | 0;
+      const v = ((CONFIG.particleBrightness + CONFIG.particleBrightnessVar * Math.random()) * 255) | 0;
       const idx = (py * w + px) * 4;
       data[idx] = v;
       data[idx + 1] = v;

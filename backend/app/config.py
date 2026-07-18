@@ -64,14 +64,56 @@ SMOOTHNESS_JERK_EPS: float = _env_float("PHANTOM_SMOOTHNESS_EPS", 0.08)
 SMOOTHNESS_CAP: float = _env_float("PHANTOM_SMOOTHNESS_CAP", 0.20)      # 一票否决封顶
 SMOOTHNESS_BIO: float = _env_float("PHANTOM_SMOOTHNESS_BIO", 0.05)
 
-# S_Bio 权重
-W_JERK: float = 0.4
-W_ZC: float = 0.3
-W_PSD: float = 0.3
+# S_Bio 权重（手册 §四.1：残差里有没有生理特征）
+W_JERK: float = _env_float("PHANTOM_W_JERK", 0.4)
+W_ZC: float = _env_float("PHANTOM_W_ZC", 0.3)
+W_PSD: float = _env_float("PHANTOM_W_PSD", 0.3)
 
-# Composite 权重
-W_DTW: float = 0.6
-W_BIO: float = 0.4
+# Composite 权重：Composite = W_DTW·S_DTW + W_BIO·S_Bio
+W_DTW: float = _env_float("PHANTOM_W_DTW", 0.6)
+W_BIO: float = _env_float("PHANTOM_W_BIO", 0.4)
+
+# ---- 震颤频段（生理性 8-12Hz）----
+TREMOR_LO_HZ: float = _env_float("PHANTOM_TREMOR_LO_HZ", 8.0)
+TREMOR_HI_HZ: float = _env_float("PHANTOM_TREMOR_HI_HZ", 12.0)
+
+# ---- _energy_score 边界（残差能量 px；手册 §三.3）----
+# <ENERGY_MIN≈过度平滑→0；ENERGY_LOW~HIGH 为生理区间→1；>ENERGY_MAX≈粗糙白噪→0
+ENERGY_MIN: float = _env_float("PHANTOM_ENERGY_MIN", 0.1)
+ENERGY_LOW: float = _env_float("PHANTOM_ENERGY_LOW", 0.3)
+ENERGY_HIGH: float = _env_float("PHANTOM_ENERGY_HIGH", 8.0)
+ENERGY_MAX: float = _env_float("PHANTOM_ENERGY_MAX", 20.0)
+
+# ---- _zc_score 边界（加速度零交叉率，次/秒；手册 §三.3）----
+# 人类反馈纠偏区间 ≈ [ZC_RISE, ZC_PLATEAU] 满分；过低(平滑)/过高(白噪翻转)降权
+ZC_FLOOR: float = _env_float("PHANTOM_ZC_FLOOR", 1.0)
+ZC_RISE: float = _env_float("PHANTOM_ZC_RISE", 1.67)
+ZC_PLATEAU: float = _env_float("PHANTOM_ZC_PLATEAU", 15.0)
+ZC_DROP: float = _env_float("PHANTOM_ZC_DROP", 40.0)
+
+# ---- _tremor_score 振幅段边界（px）----
+TREMOR_AMP_MIN: float = _env_float("PHANTOM_TREMOR_AMP_MIN", 0.05)
+TREMOR_AMP_LOW: float = _env_float("PHANTOM_TREMOR_AMP_LOW", 0.3)
+TREMOR_AMP_HIGH: float = _env_float("PHANTOM_TREMOR_AMP_HIGH", 8.0)
+TREMOR_AMP_MAX: float = _env_float("PHANTOM_TREMOR_AMP_MAX", 20.0)
+
+# ---- _tremor_score PSD 占比段（8-12Hz 功率占比）----
+# ≤TREMOR_PSD_MIN 无结构；TREMOR_PSD_LOW 上限；TREMOR_PSD_MID 上升尺度
+TREMOR_PSD_MIN: float = _env_float("PHANTOM_TREMOR_PSD_MIN", 0.02)
+TREMOR_PSD_LOW: float = _env_float("PHANTOM_TREMOR_PSD_LOW", 0.4)
+TREMOR_PSD_MID: float = _env_float("PHANTOM_TREMOR_PSD_MID", 0.13)
+
+# tremor 子分内部权重：tremor_score = W_TREMOR_AMP·amp_s + W_TREMOR_PSD·ratio_s
+W_TREMOR_AMP: float = _env_float("PHANTOM_W_TREMOR_AMP", 0.5)
+W_TREMOR_PSD: float = _env_float("PHANTOM_W_TREMOR_PSD", 0.5)
+
+# ---- DTW 方向拟合衰减尺度（手册 §四.1）----
+# 平均每点偏差占对角线 DTW_D_REF_RATIO 时 S≈0.37；越大越宽松
+DTW_D_REF_RATIO: float = _env_float("PHANTOM_DTW_D_REF_RATIO", 0.15)
+
+# ---- Challenge 视觉参数（下发前端）----
+TARGET_HALF: int = _env_int("PHANTOM_TARGET_HALF", 22)   # 目标方块半边长（画布相对）
+FPS: int = _env_int("PHANTOM_FPS", 60)                   # 帧率（仅作约定下发给前端）
 
 # ---- 轨迹有效性下限 ----
 MIN_POINTS: int = _env_int("PHANTOM_MIN_POINTS", 30)

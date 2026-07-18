@@ -5,6 +5,13 @@
 #   打开 http://localhost           （官方 demo，前端 + 同源 /api 反代）
 #   打开 http://localhost/demo.html （接入示例页，引用 ./phantom.js）
 #
+# 可调参数集中在 .env（见各 PHANTOM_* / VITE_* 变量）。
+# 注意：
+#   - 画布尺寸只改 PHANTOM_CANVAS_W/H —— 后端按它生成路径、前端 VITE_CANVAS_W/H 从
+#     同一变量取值，保证两者一致（否则路径出界）。改后需 `--build` 重 build 前端镜像。
+#   - 雪花密度/亮度类 VITE_PARTICLE_* 属前端 build 时注入，改后同样需重 build 前端镜像。
+#   - 后端 PHANTOM_* 改完重启 backend 容器即可生效。
+#
 # 生产部署前请务必修改 .env 里的 PHANTOM_TOKEN_SECRET 与 PHANTOM_CORS_ORIGINS。
 
 services:
@@ -28,6 +35,39 @@ services:
       PHANTOM_CORS_ORIGINS: ${PHANTOM_CORS_ORIGINS:-http://localhost,http://localhost:8088}
       # ⚠️ 生产部署：注入稳定随机密钥（>=32 字节），多 worker 才能一致校验 token
       PHANTOM_TOKEN_SECRET: ${PHANTOM_TOKEN_SECRET:-}
+      # 画布尺寸：后端按此生成贝塞尔路径（与前端 VITE_CANVAS_* 单一来源，见 frontend.build.args）
+      PHANTOM_CANVAS_W: ${PHANTOM_CANVAS_W:-480}
+      PHANTOM_CANVAS_H: ${PHANTOM_CANVAS_H:-480}
+      PHANTOM_CHALLENGE_DURATION: ${PHANTOM_CHALLENGE_DURATION:-5.0}
+      # 以下全部可选，留空走 config.py 内置默认值；详细说明见 backend/.env.example
+      PHANTOM_TARGET_HALF: ${PHANTOM_TARGET_HALF:-}
+      PHANTOM_FPS: ${PHANTOM_FPS:-}
+      PHANTOM_PASS_THRESHOLD: ${PHANTOM_PASS_THRESHOLD:-}
+      PHANTOM_W_JERK: ${PHANTOM_W_JERK:-}
+      PHANTOM_W_ZC: ${PHANTOM_W_ZC:-}
+      PHANTOM_W_PSD: ${PHANTOM_W_PSD:-}
+      PHANTOM_W_DTW: ${PHANTOM_W_DTW:-}
+      PHANTOM_W_BIO: ${PHANTOM_W_BIO:-}
+      PHANTOM_DTW_D_REF_RATIO: ${PHANTOM_DTW_D_REF_RATIO:-}
+      PHANTOM_TREMOR_LO_HZ: ${PHANTOM_TREMOR_LO_HZ:-}
+      PHANTOM_TREMOR_HI_HZ: ${PHANTOM_TREMOR_HI_HZ:-}
+      PHANTOM_ENERGY_MIN: ${PHANTOM_ENERGY_MIN:-}
+      PHANTOM_ENERGY_LOW: ${PHANTOM_ENERGY_LOW:-}
+      PHANTOM_ENERGY_HIGH: ${PHANTOM_ENERGY_HIGH:-}
+      PHANTOM_ENERGY_MAX: ${PHANTOM_ENERGY_MAX:-}
+      PHANTOM_ZC_FLOOR: ${PHANTOM_ZC_FLOOR:-}
+      PHANTOM_ZC_RISE: ${PHANTOM_ZC_RISE:-}
+      PHANTOM_ZC_PLATEAU: ${PHANTOM_ZC_PLATEAU:-}
+      PHANTOM_ZC_DROP: ${PHANTOM_ZC_DROP:-}
+      PHANTOM_TREMOR_AMP_MIN: ${PHANTOM_TREMOR_AMP_MIN:-}
+      PHANTOM_TREMOR_AMP_LOW: ${PHANTOM_TREMOR_AMP_LOW:-}
+      PHANTOM_TREMOR_AMP_HIGH: ${PHANTOM_TREMOR_AMP_HIGH:-}
+      PHANTOM_TREMOR_AMP_MAX: ${PHANTOM_TREMOR_AMP_MAX:-}
+      PHANTOM_TREMOR_PSD_MIN: ${PHANTOM_TREMOR_PSD_MIN:-}
+      PHANTOM_TREMOR_PSD_LOW: ${PHANTOM_TREMOR_PSD_LOW:-}
+      PHANTOM_TREMOR_PSD_MID: ${PHANTOM_TREMOR_PSD_MID:-}
+      PHANTOM_W_TREMOR_AMP: ${PHANTOM_W_TREMOR_AMP:-}
+      PHANTOM_W_TREMOR_PSD: ${PHANTOM_W_TREMOR_PSD:-}
     restart: unless-stopped
     networks: [phantom-net]
     # 不直接对外暴露端口：由 frontend 容器的 nginx 反代 /api 访问。
@@ -38,6 +78,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # 画布尺寸从同一 PHANTOM_CANVAS_W/H 取值，保证与后端一致（单一来源）
+        VITE_CANVAS_W: ${PHANTOM_CANVAS_W:-480}
+        VITE_CANVAS_H: ${PHANTOM_CANVAS_H:-480}
+        VITE_API_BASE: ${VITE_API_BASE:-}
+        VITE_PARTICLE_DENSITY: ${VITE_PARTICLE_DENSITY:-0.6}
+        VITE_PARTICLE_DROP_RATE: ${VITE_PARTICLE_DROP_RATE:-0.05}
+        VITE_PARTICLE_BRIGHTNESS: ${VITE_PARTICLE_BRIGHTNESS:-0.55}
+        VITE_PARTICLE_BRIGHTNESS_VAR: ${VITE_PARTICLE_BRIGHTNESS_VAR:-0.45}
     container_name: phantom-frontend
     depends_on: [backend]
     ports:
