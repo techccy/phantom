@@ -19,7 +19,7 @@
 
 > 交互细节：按下按钮时方块从起点开始动态显影并采集轨迹；松手即停止移动（滑块停在原地、画面退化为纯噪点）并自动提交本次轨迹供评分。
 
-## 核心判定（手册 §四）
+## 核心判定
 
 ```
 Composite = W_DTW · S_DTW + W_BIO · S_Bio              默认 0.6 / 0.4，阈值 0.8
@@ -35,7 +35,7 @@ S_Bio     = W_JERK·energy + W_ZC·zc + W_PSD·tremor      默认 0.4 / 0.3 / 0.
   - 8–12Hz 震颤幅度与功率占比
 - **平滑否决**：残差能量 ≈0（过度平滑）→ `S_Bio=0.05`，Composite 封顶 **0.20**
 
-## 安全设计（PRD §四）
+## 安全设计
 
 | 需求 | 实现 |
 |---|---|
@@ -258,8 +258,7 @@ phantom/
 
 ---
 
-Buy me a coffee ~
-
+## Buy me a coffee ~
 ![donate](static/donate.png)
 
-![donate](static/donate_alipay.jpg)
+![donate](static/donate_alipay.jpeg)
