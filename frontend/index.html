@@ -3,52 +3,581 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Phantom · 人机验证 Demo</title>
+    <title>Phantom · 无感人机验证</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
+      /* ============================================================
+         Design tokens —— 复刻 design-os 的 Refined Utility 设计系统
+         暖中性 stone 调 + lime 强调色；DM Sans / IBM Plex Mono 字体。
+         ============================================================ */
       :root {
-        color-scheme: dark;
+        --radius: 0.5rem;
+        --radius-sm: calc(var(--radius) - 4px); /* 4px */
+        --radius-md: calc(var(--radius) - 2px); /* 6px */
+        --radius-lg: var(--radius); /* 8px */
+        --radius-xl: calc(var(--radius) + 4px); /* 12px */
+        --radius-full: 999px;
+
+        --font-display: "DM Sans", system-ui, sans-serif;
+        --font-body: "DM Sans", system-ui, sans-serif;
+        --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+        /* Light —— Warm Stone palette */
+        --bg: oklch(0.985 0.001 106.424); /* stone-50 #FAFAF9 */
+        --fg: oklch(0.216 0.006 56.043); /* stone-900 #1C1917 */
+        --card: oklch(1 0 0); /* white */
+        --card-fg: oklch(0.216 0.006 56.043);
+        --muted: oklch(0.97 0.001 106.424); /* stone-100 */
+        --muted-fg: oklch(0.444 0.011 73.639); /* stone-600 #57534E */
+        --subtle-fg: oklch(0.553 0.013 58.071); /* stone-500 */
+        --border: oklch(0.923 0.003 48.717); /* stone-200 #E7E5E4 */
+        --border-subtle: oklch(0.97 0.001 106.424); /* stone-100 */
+        --primary: oklch(0.216 0.006 56.043); /* stone-900 */
+        --primary-fg: oklch(0.985 0.001 106.424); /* stone-50 */
+        --accent: oklch(0.648 0.2 131.684); /* lime-500 */
+        --accent-soft: color-mix(in oklch, var(--accent) 25%, transparent);
+        --link: #6ea8fe;
+
+        --shadow-sm: 0 1px 2px 0 rgba(28, 25, 23, 0.04);
       }
+
+      .dark {
+        /* Dark —— Warm Stone dark palette */
+        --bg: oklch(0.216 0.006 56.043); /* stone-900 #1C1917 */
+        --fg: oklch(0.985 0.001 106.424); /* stone-50 */
+        --card: oklch(0.268 0.007 34.298); /* stone-800 #292524 */
+        --card-fg: oklch(0.985 0.001 106.424);
+        --muted: oklch(0.318 0.008 43.185); /* stone-700 */
+        --muted-fg: oklch(0.709 0.01 56.259); /* stone-400 #A8A29E */
+        --subtle-fg: oklch(0.553 0.013 58.071); /* stone-500 */
+        --border: oklch(0.370 0.010 67.558); /* stone-600 */
+        --border-subtle: oklch(0.318 0.008 43.185); /* stone-700 */
+        --primary: oklch(0.923 0.003 48.717); /* stone-200 */
+        --primary-fg: oklch(0.216 0.006 56.043); /* stone-900 */
+        --accent: oklch(0.648 0.2 131.684); /* lime-500 */
+        --accent-soft: color-mix(in oklch, var(--accent) 25%, transparent);
+        --link: #93c5fd;
+
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+      }
+
       * {
         box-sizing: border-box;
       }
+
+      html {
+        color-scheme: light;
+      }
+      html.dark {
+        color-scheme: dark;
+      }
+
       body {
         margin: 0;
         min-height: 100vh;
+        font-family: var(--font-body);
+        background: var(--bg);
+        color: var(--fg);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        animation: fade-in 200ms ease-out;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+
+      code,
+      pre,
+      kbd {
+        font-family: var(--font-mono);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* ============================ Layout ============================ */
+      .shell {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      /* Header */
+      .header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in oklch, var(--card) 80%, transparent);
+        backdrop-filter: saturate(180%) blur(8px);
+        -webkit-backdrop-filter: saturate(180%) blur(8px);
+      }
+      .header-inner {
+        max-width: 768px;
+        margin: 0 auto;
+        padding: 0.75rem 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+      }
+      .brand-mark {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-md);
+        background: var(--primary);
+        color: var(--primary-fg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-sm);
+      }
+      .brand-mark svg {
+        width: 16px;
+        height: 16px;
+      }
+      .brand-name {
+        font-family: var(--font-display);
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .brand-tag {
+        font-size: 0.75rem;
+        color: var(--muted-fg);
+        padding: 0.125rem 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-full);
+        margin-left: 0.25rem;
+      }
+      .header-spacer {
+        flex: 1;
+      }
+
+      /* Theme toggle */
+      .theme-toggle {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--subtle-fg);
+        cursor: pointer;
+        transition: color 150ms ease, background 150ms ease;
+      }
+      .theme-toggle:hover {
+        color: var(--fg);
+        background: var(--muted);
+      }
+      .theme-toggle svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* Main */
+      .main {
+        flex: 1;
+        width: 100%;
+        max-width: 768px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 4rem;
+      }
+
+      .eyebrow {
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--subtle-fg);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .eyebrow::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+
+      /* Hero */
+      .hero h1 {
+        font-size: clamp(1.9rem, 5vw, 2.75rem);
+        line-height: 1.1;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+      }
+      .hero .lede {
+        font-size: 1.05rem;
+        line-height: 1.6;
+        color: var(--muted-fg);
+        max-width: 40rem;
+        margin: 0;
+      }
+      .hero-steps {
+        margin-top: 1.5rem;
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.5rem 0.875rem;
+        background: var(--muted);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        font-size: 0.85rem;
+        color: var(--muted-fg);
+        font-family: var(--font-mono);
+      }
+      .hero-steps .dot {
+        width: 4px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--subtle-fg);
+        opacity: 0.6;
+      }
+
+      /* Section heading */
+      .section {
+        display: flex;
+        flex-direction: column;
+      }
+      .section-title {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .section-desc {
+        color: var(--muted-fg);
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin: 0 0 1.75rem;
+        max-width: 42rem;
+      }
+
+      /* Feature grid */
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+      }
+      .feature-card {
+        background: var(--card);
+        color: var(--card-fg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        padding: 1.25rem;
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+      }
+      .feature-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-md);
+        background: var(--muted);
+        color: var(--fg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .feature-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .feature-title {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      .feature-body {
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: var(--muted-fg);
+        margin: 0;
+      }
+
+      /* Demo card */
+      .demo-card {
+        background: var(--card);
+        color: var(--card-fg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+      }
+      .demo-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .demo-card-title {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      .demo-card-sub {
+        font-size: 0.8rem;
+        color: var(--muted-fg);
+        font-family: var(--font-mono);
+      }
+      .demo-card-body {
+        padding: 1.5rem;
+        display: flex;
+        justify-content: center;
+      }
+
+      /* Code block */
+      .code-block {
+        margin: 0;
+        background: var(--muted);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1rem 1.25rem;
+        overflow-x: auto;
+      }
+      .code-block pre {
+        margin: 0;
+        font-size: 0.8rem;
+        line-height: 1.7;
+        color: var(--fg);
+        white-space: pre;
+      }
+      .code-block .tok-com {
+        color: var(--muted-fg);
+      }
+      .code-block .tok-key {
+        color: var(--accent);
+      }
+
+      /* Footer */
+      .footer {
+        padding: 2rem 1.5rem;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        gap: 16px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        background: #111;
-        color: #eee;
-      }
-      h1 {
-        font-size: 20px;
-        font-weight: 600;
-        margin: 0;
-      }
-      .hint {
-        font-size: 13px;
-        color: #888;
-        max-width: 480px;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--muted-fg);
+        line-height: 1.8;
         text-align: center;
       }
-      /* Phantom widget 会自注入 .phantom-widget 样式，这里只给容器一个占位 */
-      #app {
-        background: #161616;
-        border-radius: 16px;
+      .footer a {
+        color: var(--link);
+        transition: text-decoration 150ms ease;
+      }
+      .footer a:hover {
+        text-decoration: underline;
+      }
+      .footer code {
+        font-size: 0.72rem;
+        color: var(--fg);
+        background: var(--muted);
+        padding: 0.125rem 0.4rem;
+        border-radius: var(--radius-sm);
+      }
+      .footer-divider {
+        height: 1px;
+        width: 100%;
+        max-width: 768px;
+        background: var(--border-subtle);
+        margin: 0 auto;
+      }
+
+      /* Responsive */
+      @media (max-width: 640px) {
+        .main {
+          padding: 2rem 1.25rem;
+          gap: 3rem;
+        }
+        .brand-tag {
+          display: none;
+        }
       }
     </style>
   </head>
   <body>
-    <h1>Phantom 人机验证</h1>
-    <p class="hint">
-      这是官方 Demo 页（仅前端流程）。完整接入示例（含后端 token 核销闭环）见
-      <code>demo.html</code> 与接入文档。
-    </p>
-    <!-- Phantom widget 将挂载到这里 -->
-    <div id="app"></div>
+    <div class="shell">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-inner">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+              <!-- Lucide: ShieldHalf -->
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2 4 5v6c0 5 3.4 8.3 8 10 4.6-1.7 8-5 8-10V5l-8-3Z" />
+                <path d="M12 2v18" />
+              </svg>
+            </span>
+            <span class="brand-name">Phantom</span>
+            <span class="brand-tag">人机验证</span>
+          </div>
+          <div class="header-spacer"></div>
+          <button id="theme-toggle" class="theme-toggle" type="button" title="切换主题" aria-label="切换主题"></button>
+        </div>
+      </header>
+
+      <!-- Main -->
+      <main class="main">
+        <!-- Hero -->
+        <section class="hero">
+          <span class="eyebrow">动态显影 · Common Fate</span>
+          <h1>无感人机验证<br />藏在噪声里的方块</h1>
+          <p class="lede">
+            Phantom 用「动态显影」视觉挑战取代传统验证码：画布上是随机噪声，只有真人通过时序积分才能看到移动方块——机器人逐帧分析只看到噪点。
+          </p>
+          <div class="hero-steps">
+            <span>按住按钮</span>
+            <span class="dot"></span>
+            <span>跟随移动方块</span>
+            <span class="dot"></span>
+            <span>方块停止后松开</span>
+          </div>
+        </section>
+
+        <!-- Features -->
+        <section class="section">
+          <h2 class="section-title">核心机制</h2>
+          <p class="section-desc">
+            从视觉防御到加密传输，Phantom 在每一层都把「不信任前端」做到位。
+          </p>
+          <div class="features">
+            <div class="feature-card">
+              <span class="feature-icon" aria-hidden="true">
+                <!-- Lucide: Boxes -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 16.5 3 14.25v-4.5L7 7.5l4 2.25v4.5L7 16.5Z" />
+                  <path d="m17 16.5-4-2.25v-4.5L17 7.5l4 2.25v4.5L17 16.5Z" />
+                  <path d="m12 21.5-4-2.25V14.7l4-2.25 4 2.25v4.55l-4 2.25Z" />
+                </svg>
+              </span>
+              <div class="feature-title">动态显影</div>
+              <p class="feature-body">
+                利用 Common Fate 视觉原理，目标方块仅在运动中被肉眼整合识别；单帧对机器人完全不可见，无法静态分析。
+              </p>
+            </div>
+
+            <div class="feature-card">
+              <span class="feature-icon" aria-hidden="true">
+                <!-- Lucide: Lock -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="11" width="16" height="10" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+              </span>
+              <div class="feature-title">零前端信任</div>
+              <p class="feature-body">
+                ECDH P-256 协商会话密钥 + AES-256-GCM 端到端加密，轨迹参数与提交数据全程密文，前端拿不到明文路径。
+              </p>
+            </div>
+
+            <div class="feature-card">
+              <span class="feature-icon" aria-hidden="true">
+                <!-- Lucide: Puzzle -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19.4 11a2 2 0 1 0 0-4h-3.2a1 1 0 0 1-.9-1.4 2 2 0 1 0-3.8 0 1 1 0 0 1-.9 1.4H4.6a1 1 0 0 0-1 1v3.6a1 1 0 0 1-1.4.9 2 2 0 1 0 0 3.8 1 1 0 0 1 1.4.9v3.1a1 1 0 0 0 1 1h3.2a1 1 0 0 0 1-1.4 2 2 0 1 1 4 0 1 1 0 0 0 1 1.4h3.2a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1Z" />
+                </svg>
+              </span>
+              <div class="feature-title">可嵌入式 SDK</div>
+              <p class="feature-body">
+                一行 script 标签即可接入，用法与 reCAPTCHA 一致；提供 mount + onSuccess/onFail 回调，token 由后端核销。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live demo -->
+        <section class="section">
+          <h2 class="section-title">在线体验</h2>
+          <p class="section-desc">
+            按住按钮，目光跟随方块轨迹，停止后松开。下方即真实 widget，验证结果会打印到浏览器控制台。
+          </p>
+          <div class="demo-card">
+            <div class="demo-card-head">
+              <span class="demo-card-title">Phantom Widget</span>
+              <span class="demo-card-sub">verify + score + token</span>
+            </div>
+            <div class="demo-card-body">
+              <!-- Phantom widget 会挂载到这里 -->
+              <div id="app"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Integration -->
+        <section class="section">
+          <h2 class="section-title">两行接入</h2>
+          <p class="section-desc">
+            引入 SDK，挂载到任意容器，拿到 token 后交给后端核销。
+          </p>
+          <div class="code-block">
+<pre><span class="tok-com">&lt;!-- 1. 引入 SDK（构建产物 dist/phantom.js）--&gt;</span>
+&lt;script src=<span class="tok-key">"/phantom.js"</span>&gt;&lt;/script&gt;
+
+<span class="tok-com">&lt;!-- 2. 挂载 widget --&gt;</span>
+&lt;div id=<span class="tok-key">"phantom-box"</span>&gt;&lt;/div&gt;
+&lt;script&gt;
+  Phantom.mount(<span class="tok-key">"#phantom-box"</span>, {
+    apiBase: <span class="tok-key">"/api"</span>,
+    onSuccess: (r) =&gt; console.log(<span class="tok-key">"token ="</span>, r.token),
+    onFail:   (r) =&gt; console.warn(<span class="tok-key">"未通过"</span>, r.detail),
+  });
+&lt;/script&gt;</pre>
+          </div>
+        </section>
+      </main>
+
+      <div class="footer-divider"></div>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <div>
+          源码：<a href="https://github.com/techccy/phantom" target="_blank" rel="noopener">github.com/techccy/phantom</a>
+        </div>
+        <div>
+          一键部署：<code>cp .env.example .env &amp;&amp; docker compose up -d --build</code>
+        </div>
+        <div>Powered by Phantom · 动态显影人机验证</div>
+      </footer>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
