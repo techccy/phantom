@@ -64,6 +64,12 @@ export function injectStyles(): void {
   opacity: 0.5;
   cursor: not-allowed;
 }
+.phantom-widget button.phantom-activate.phantom-retry {
+  background: var(--ph-border);
+}
+.phantom-widget button.phantom-activate.phantom-retry:hover {
+  filter: brightness(1.15);
+}
 .phantom-widget .phantom-status {
   font-size: 14px;
   color: var(--ph-fg);

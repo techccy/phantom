@@ -83,6 +83,7 @@ class WidgetSession {
     private activateBtn: HTMLButtonElement,
     private onResult: (r: VerifyResult) => void,
     private onError: (e: Error) => void,
+    private onRetry: () => void,
   ) {}
 
   async start(): Promise<void> {
@@ -173,14 +174,42 @@ class WidgetSession {
       this.result.textContent = result.passed
         ? `✅ 通过 (score ${result.score.toFixed(2)})`
         : `❌ 未通过 (score ${result.score.toFixed(2)})`;
-      this.status.textContent = result.passed ? "验证成功" : "验证失败";
+      if (result.passed) {
+        this.status.textContent = "验证成功";
+      } else {
+        // 验证失败：按钮退化为"点击刷新重试"，点击触发新一轮拉题
+        this.status.textContent = "验证失败";
+        this.turnIntoRetryButton();
+      }
       this.onResult(result);
     } catch (e) {
       this.renderer?.stop();
+      this.finished = true;
       this.status.textContent = "提交失败";
       this.result.textContent = `⚠️ ${(e as Error).message}`;
+      // 网络异常同样允许点击重试
+      this.turnIntoRetryButton();
       this.onError(e as Error);
     }
+  }
+
+  /** 把"按住跟随方块"按钮变成"点击刷新重试"按钮（点击→重新拉题）。 */
+  private turnIntoRetryButton(): void {
+    this._unbind();
+    this._unbind = () => {};
+    this.activateBtn.textContent = "点击刷新重试";
+    this.activateBtn.classList.add("phantom-retry");
+    this.activateBtn.disabled = false;
+    const onClick = (): void => {
+      this.activateBtn.removeEventListener("click", onClick);
+      this.onRetry();
+    };
+    this.activateBtn.addEventListener("click", onClick);
+    // 合并到 _unbind 以便 destroy/reset 清理
+    this._unbind = () => {
+      this.activateBtn.removeEventListener("click", onClick);
+      this.activateBtn.classList.remove("phantom-retry");
+    };
   }
 
   destroy(): void {
@@ -240,6 +269,26 @@ export function mount(
     else opts.onFail?.(r);
   };
 
+  // 重试按钮点击后：把按钮复位为"按住跟随方块"，再开新一轮 session
+  const resetSession = (): void => {
+    activateBtn.classList.remove("phantom-retry");
+    activateBtn.textContent = "按住跟随方块";
+    activateBtn.disabled = true;
+    status.textContent = "正在准备验证题…";
+    result.textContent = "";
+    session = new WidgetSession(
+      canvas,
+      opts.apiBase,
+      status,
+      result,
+      activateBtn,
+      dispatch,
+      (e) => opts.onError?.(e),
+      resetSession,
+    );
+    void session.start();
+  };
+
   let session = new WidgetSession(
     canvas,
     opts.apiBase,
@@ -248,6 +297,7 @@ export function mount(
     activateBtn,
     dispatch,
     (e) => opts.onError?.(e),
+    resetSession,
   );
   void session.start();
 
@@ -258,20 +308,7 @@ export function mount(
     },
     reset(): void {
       session.destroy();
-      // 重建一个新的 session 跑同样的 DOM
-      status.textContent = "正在准备验证题…";
-      result.textContent = "";
-      activateBtn.disabled = true;
-      session = new WidgetSession(
-        canvas,
-        opts.apiBase,
-        status,
-        result,
-        activateBtn,
-        dispatch,
-        (e) => opts.onError?.(e),
-      );
-      void session.start();
+      resetSession();
     },
   };
 }
