@@ -17,9 +17,12 @@ export const CONFIG = {
   canvasWidth: envNum("VITE_CANVAS_W", 480),
   canvasHeight: envNum("VITE_CANVAS_H", 480),
 
-  // 渲染参数（动态显影"雪花"簇）：越大越密/越亮，过大易被密度分析抠图
-  particleDensity: envNum("VITE_PARTICLE_DENSITY", 0.6),       // 目标方块每像素铺多少亮粒子
+  // 渲染参数（动态显影"雪花"簇）：越大越密，过大易被密度分析抠图
+  particleDensity: envNum("VITE_PARTICLE_DENSITY", 0.6),       // 目标方块簇粒子数 = 方块面积 × 此值
   particleDropRate: envNum("VITE_PARTICLE_DROP_RATE", 0.05),   // 反密度分析：每帧随机丢弃比例
-  particleBrightness: envNum("VITE_PARTICLE_BRIGHTNESS", 0.55), // 目标簇亮度基值（0~1）
-  particleBrightnessVar: envNum("VITE_PARTICLE_BRIGHTNESS_VAR", 0.45), // 亮度随机闪烁幅度
+  // 以下两项为历史兼容字段：单帧灰度泄露修复后（renderer.ts），目标簇亮度已与背景
+  // 共用同一采样器（i.i.d. uniform[0,255]），不再读取这两项。保留是为不破坏已部署的
+  // .env 配置；如需重新启用差异化亮度，请先评估 docs/issue.md §4 的泄露风险。
+  particleBrightness: envNum("VITE_PARTICLE_BRIGHTNESS", 0.55), // （已停用）目标簇亮度基值（0~1）
+  particleBrightnessVar: envNum("VITE_PARTICLE_BRIGHTNESS_VAR", 0.45), // （已停用）亮度随机闪烁幅度
 };
