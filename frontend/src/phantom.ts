@@ -75,12 +75,16 @@ class WidgetSession {
   private challengeId = "";
   private collecting = false;
   private finished = false;
+  /** 本题路径时长（秒），来自后端解密参数，用于按钮充能进度条对齐渲染结束时刻。 */
+  private duration = 3;
+  /** 失败→重试 的延迟计时器，destroy/reset 时清理。 */
+  private retryTimer = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
     private apiBase: string,
     private status: HTMLElement,
-    private result: HTMLElement,
+    private overlay: HTMLElement,
     private activateBtn: HTMLButtonElement,
     private onResult: (r: VerifyResult) => void,
     private onError: (e: Error) => void,
@@ -91,7 +95,8 @@ class WidgetSession {
     this.canvas.width = CONFIG.canvasWidth;
     this.canvas.height = CONFIG.canvasHeight;
     this.status.textContent = "正在准备验证题…";
-    this.result.textContent = "";
+    // 加载态：遮罩隐藏，避免遮挡空白 canvas
+    this.overlay.classList.add("phantom-hidden");
     this.activateBtn.disabled = true;
 
     try {
@@ -113,13 +118,18 @@ class WidgetSession {
         challenge.encryptedParams.ciphertext,
       );
       const params = JSON.parse(new TextDecoder().decode(paramsJson)) as BezierParams;
+      this.duration = params.duration;
       this.renderer = new PhantomRenderer(this.canvas, params);
       this.tracker = new TrajectoryTracker(this.canvas);
 
-      // 题目就绪：先画一帧静态噪点，等用户按住按钮再开始动态显影
-      this.status.textContent = "按住按钮不放 > 拖动鼠标跟随方块";
+      // 题目就绪：先画一帧静态噪点，等用户按住按钮再开始动态显影。
+      // 进度条充能时长与后端下发的路径时长对齐（充能结束 ≈ 渲染结束）。
+      this.activateBtn.style.setProperty("--ph-charge-duration", `${this.duration}s`);
+      this.status.textContent = "";
       this.activateBtn.disabled = false;
       this.renderer.drawStaticNoise();
+      // 题目就绪：显示玩法遮罩，用户按下即隐藏（见 bindInteraction.onDown）
+      this.overlay.classList.remove("phantom-hidden");
       this.bindInteraction();
     } catch (e) {
       this.onError(e as Error);
@@ -131,15 +141,18 @@ class WidgetSession {
     const onDown = (): void => {
       if (this.collecting || this.finished) return;
       this.collecting = true;
-      // 用户按下才启动动态显影（startTime 重置为按下时刻，t 从 0 走）
+      // 按下瞬间：隐藏玩法遮罩，启动动态显影 + 轨迹采集，
+      // 按钮进入 Holding 态（霓虹充能 + 进度条跑动，动画每次重新播放）
+      this.overlay.classList.add("phantom-hidden");
+      this.activateBtn.classList.add("phantom-holding");
       this.renderer?.start();
       this.tracker?.start();
-      this.status.textContent = "跟随方块移动 > 静止后松手";
     };
     const onUp = (): void => {
       if (!this.collecting || this.finished) return;
       this.collecting = false;
-      // 松手即停：退化为纯噪点（滑块不再移动）
+      // 松手即停：进度条定格，渲染退化为纯噪点
+      this.activateBtn.classList.remove("phantom-holding");
       this.renderer?.pause();
       const samples = this.tracker?.stop() ?? [];
       void this.verifyAndFinish(samples);
@@ -172,34 +185,50 @@ class WidgetSession {
       const result = await submitVerify(this.apiBase, this.challengeId, iv, ciphertext);
       this.renderer?.stop();
       this.finished = true;
-      this.result.textContent = result.passed
-        ? `✅ 通过 (score ${result.score.toFixed(2)})`
-        : `❌ 未通过 (score ${result.score.toFixed(2)})`;
+      this.status.textContent = "";
       if (result.passed) {
-        this.status.textContent = "验证成功";
+        // 成功：按钮翡翠绿微放大，文字显示"验证通过"
+        this.activateBtn.classList.add("phantom-success");
+        this.activateBtn.textContent = "验证通过";
       } else {
-        // 验证失败：按钮退化为"点击刷新重试"，点击触发新一轮拉题
-        this.status.textContent = "验证失败";
-        this.turnIntoRetryButton();
+        // 失败：按钮警示红 + 震动，闪现 1s 后转"点击刷新重试"
+        this.activateBtn.classList.add("phantom-fail");
+        this.activateBtn.textContent = "验证失败";
+        this.scheduleRetry();
       }
       this.onResult(result);
     } catch (e) {
       this.renderer?.stop();
       this.finished = true;
       this.status.textContent = "提交失败";
-      this.result.textContent = `⚠️ ${(e as Error).message}`;
-      // 网络异常同样允许点击重试
-      this.turnIntoRetryButton();
+      // 网络异常走相同的 fail→retry 流程
+      this.activateBtn.classList.add("phantom-fail");
+      this.activateBtn.textContent = "验证失败";
+      this.scheduleRetry();
       this.onError(e as Error);
     }
+  }
+
+  /** 闪现失败态 1s 后转为"点击刷新重试"按钮。 */
+  private scheduleRetry(): void {
+    window.clearTimeout(this.retryTimer);
+    this.retryTimer = window.setTimeout(() => {
+      this.turnIntoRetryButton();
+    }, 1000);
   }
 
   /** 把"按住跟随方块"按钮变成"点击刷新重试"按钮（点击→重新拉题）。 */
   private turnIntoRetryButton(): void {
     this._unbind();
     this._unbind = () => {};
-    this.activateBtn.textContent = "点击刷新重试";
+    // 清除所有结果态 class，复位到可点击的重试样式
+    this.activateBtn.classList.remove(
+      "phantom-holding",
+      "phantom-success",
+      "phantom-fail",
+    );
     this.activateBtn.classList.add("phantom-retry");
+    this.activateBtn.textContent = "点击刷新重试";
     this.activateBtn.disabled = false;
     const onClick = (): void => {
       this.activateBtn.removeEventListener("click", onClick);
@@ -215,6 +244,7 @@ class WidgetSession {
 
   destroy(): void {
     this._unbind();
+    window.clearTimeout(this.retryTimer);
     this.renderer?.stop();
     this.tracker?.stop();
   }
@@ -243,26 +273,40 @@ export function mount(
   root.className = "phantom-widget";
   root.setAttribute("data-theme", opts.theme ?? "dark");
 
+  // canvas + 玩法遮罩一起放进相对定位的 wrap，遮罩 absolute 覆盖在画布上
+  const stageWrap = document.createElement("div");
+  stageWrap.className = "phantom-stage-wrap";
+
   const canvas = document.createElement("canvas");
   canvas.className = "phantom-stage";
+
+  const overlay = document.createElement("div");
+  overlay.className = "phantom-overlay phantom-hidden";
+  const overlayText = document.createElement("div");
+  overlayText.className = "phantom-overlay-text";
+  overlayText.innerHTML = "按住下方按钮不放<br>按住屏幕跟随马赛克中移动的部分<br>停止后松手";
+  overlay.appendChild(overlayText);
+
+  stageWrap.appendChild(canvas);
+  stageWrap.appendChild(overlay);
 
   const activateBtn = document.createElement("button");
   activateBtn.className = "phantom-activate";
   activateBtn.type = "button";
-  activateBtn.textContent = "按住跟随方块";
+  activateBtn.textContent = "按住并跟随方块";
   activateBtn.disabled = true;
+  // 充能进度条贴在按钮底部
+  const progress = document.createElement("span");
+  progress.className = "phantom-progress";
+  activateBtn.appendChild(progress);
 
   const status = document.createElement("div");
   status.className = "phantom-status";
   status.textContent = "正在准备验证题…";
 
-  const result = document.createElement("div");
-  result.className = "phantom-result";
-
-  root.appendChild(canvas);
+  root.appendChild(stageWrap);
   root.appendChild(activateBtn);
   root.appendChild(status);
-  root.appendChild(result);
   container.appendChild(root);
 
   const dispatch = (r: VerifyResult): void => {
@@ -270,18 +314,24 @@ export function mount(
     else opts.onFail?.(r);
   };
 
-  // 重试按钮点击后：把按钮复位为"按住跟随方块"，再开新一轮 session
+  // 重试按钮点击后：把按钮复位为"按住并跟随方块"，再开新一轮 session。
+  // 注意：新 session.start() 就绪后会自行显示遮罩，这里无需手动管理遮罩显示。
   const resetSession = (): void => {
-    activateBtn.classList.remove("phantom-retry");
-    activateBtn.textContent = "按住跟随方块";
+    activateBtn.classList.remove(
+      "phantom-holding",
+      "phantom-success",
+      "phantom-fail",
+      "phantom-retry",
+    );
+    activateBtn.textContent = "按住并跟随方块";
+    activateBtn.appendChild(progress);
     activateBtn.disabled = true;
     status.textContent = "正在准备验证题…";
-    result.textContent = "";
     session = new WidgetSession(
       canvas,
       opts.apiBase,
       status,
-      result,
+      overlay,
       activateBtn,
       dispatch,
       (e) => opts.onError?.(e),
@@ -294,7 +344,7 @@ export function mount(
     canvas,
     opts.apiBase,
     status,
-    result,
+    overlay,
     activateBtn,
     dispatch,
     (e) => opts.onError?.(e),
