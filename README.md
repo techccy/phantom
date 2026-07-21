@@ -262,5 +262,3 @@ phantom/
 
 ## Buy me a coffee ~
 ![donate](static/donate.png)
-
-![donate](static/donate_alipay.jpeg)

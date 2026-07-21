@@ -117,7 +117,7 @@ class WidgetSession {
       this.tracker = new TrajectoryTracker(this.canvas);
 
       // 题目就绪：先画一帧静态噪点，等用户按住按钮再开始动态显影
-      this.status.textContent = "按住下方按钮，跟随移动的方块";
+      this.status.textContent = "按住按钮不放 > 拖动鼠标跟随方块";
       this.activateBtn.disabled = false;
       this.renderer.drawStaticNoise();
       this.bindInteraction();
@@ -134,7 +134,7 @@ class WidgetSession {
       // 用户按下才启动动态显影（startTime 重置为按下时刻，t 从 0 走）
       this.renderer?.start();
       this.tracker?.start();
-      this.status.textContent = "跟随方块移动…";
+      this.status.textContent = "跟随方块移动 > 静止后松手";
     };
     const onUp = (): void => {
       if (!this.collecting || this.finished) return;
