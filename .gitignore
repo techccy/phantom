@@ -28,3 +28,4 @@ dist/
 .idea/
 .vscode/
 *.swp
+.zcode/

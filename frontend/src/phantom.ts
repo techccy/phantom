@@ -284,7 +284,7 @@ export function mount(
   overlay.className = "phantom-overlay phantom-hidden";
   const overlayText = document.createElement("div");
   overlayText.className = "phantom-overlay-text";
-  overlayText.innerHTML = "按住下方按钮不放<br>按住屏幕跟随马赛克中移动的部分<br>停止后松手";
+  overlayText.innerHTML = "按住下方按钮不放<br>拖动跟随移动的部分<br>停止后松手";
   overlay.appendChild(overlayText);
 
   stageWrap.appendChild(canvas);
