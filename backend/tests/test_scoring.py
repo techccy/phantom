@@ -118,3 +118,42 @@ def test_insufficient_points():
     b = engine.score_trajectory(xs, ys, ts, CP, W, H)
     assert not b.passed
     assert b.extras["reason"] == "insufficient_points"
+
+
+def _touch_human_trajectory(n: int = 160):
+    """模拟移动端触屏降采样后的真人轨迹：采样点稀疏 + 低幅微抖。
+
+    回归 docs/log7 的真实场景——iOS Safari 把 pointermove 合并降采样，
+    残差能量偏低（实测 ~0.15px）但仍含生理结构（jerk 非零、加速度过零）。
+    放宽后的 ENERGY_LOW 应让这类真实人类轨迹通过，而非误判为过度平滑机器。
+    """
+    rng = np.random.default_rng(123)
+    t = np.linspace(0, DURATION, n)
+    lag = 0.15
+    phase = np.clip((t - lag) / DURATION, 0, 1)
+    cp = np.array(CP, dtype=float)
+    u = 1 - phase
+    px = u**3 * cp[0, 0] + 3 * u**2 * phase * cp[1, 0] + 3 * u * phase**2 * cp[2, 0] + phase**3 * cp[3, 0]
+    py = u**3 * cp[0, 1] + 3 * u**2 * phase * cp[1, 1] + 3 * u * phase**2 * cp[2, 1] + phase**3 * cp[3, 1]
+    # 低幅纠偏（仍有方向修正 → 加速度多次过零）
+    correct = 0.5 * np.sin(2 * np.pi * 1.3 * t) + 0.4 * np.sin(2 * np.pi * 2.1 * t)
+    # 小幅生理震颤
+    tremor = 0.2 * np.sin(2 * np.pi * 10 * t) + 0.15 * np.sin(2 * np.pi * 9.3 * t + 0.5)
+    # 触屏降采样后高频微抖被压缩
+    jitter = rng.normal(0, 0.12, n)
+    xs = px + correct + tremor + jitter
+    ys = py + 0.7 * correct + 0.6 * tremor + rng.normal(0, 0.12, n)
+    # 移动端合并事件后采样间隔偏大且较均匀
+    ts = np.cumsum(rng.uniform(0.012, 0.022, n)) * 1000  # ms
+    ts = ts - ts[0]
+    return xs, ys, ts
+
+
+def test_touch_human_passes():
+    """回归 docs/log7：iOS 触屏降采样后残差偏低但含生理结构的真人轨迹应通过。"""
+    xs, ys, ts = _touch_human_trajectory()
+    b = engine.score_trajectory(xs, ys, ts, CP, W, H)
+    assert not b.smoothness_veto, "低残差真人轨迹不应触发平滑否决"
+    assert b.residual_energy > config.SMOOTHNESS_JERK_EPS, f"残差应高于否决线: {b.residual_energy}"
+    assert b.residual_energy < 0.5, f"残差应偏低(模拟触屏降采样): {b.residual_energy}"
+    assert b.passed, f"触屏真人轨迹应通过: composite={b.composite} detail={engine.breakdown_to_dict(b)}"

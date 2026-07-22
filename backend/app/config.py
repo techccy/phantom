@@ -89,8 +89,11 @@ TREMOR_HI_HZ: float = _env_float("PHANTOM_TREMOR_HI_HZ", 12.0)
 
 # ---- _energy_score 边界（残差能量 px；手册 §三.3）----
 # <ENERGY_MIN≈过度平滑→0；ENERGY_LOW~HIGH 为生理区间→1；>ENERGY_MAX≈粗糙白噪→0
-ENERGY_MIN: float = _env_float("PHANTOM_ENERGY_MIN", 0.1)
-ENERGY_LOW: float = _env_float("PHANTOM_ENERGY_LOW", 0.3)
+# 注：移动端浏览器 pointermove 被合并降采样，真人触屏残差天然偏小（实测 ~0.15px），
+# 下沿 ENERGY_MIN/LOW 较手册桌面值放宽，避免真实人类被误判为过度平滑机器；
+# 低残差真机器仍由 SMOOTHNESS_JERK_EPS 否决线兜底。
+ENERGY_MIN: float = _env_float("PHANTOM_ENERGY_MIN", 0.08)
+ENERGY_LOW: float = _env_float("PHANTOM_ENERGY_LOW", 0.15)
 ENERGY_HIGH: float = _env_float("PHANTOM_ENERGY_HIGH", 8.0)
 ENERGY_MAX: float = _env_float("PHANTOM_ENERGY_MAX", 20.0)
 
