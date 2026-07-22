@@ -47,6 +47,8 @@ export class PhantomRenderer {
   private previewing = false;
   private previewRafId = 0;
   private previewStartTime = 0;
+  /** 保留 canvas 引用以读取实际 buffer 尺寸（PC/Mobile 不同）。 */
+  private readonly canvas: HTMLCanvasElement;
   /** 目标方块内每帧铺多少亮粒子（按方块面积比例，承载"共同命运"显影）。 */
   private readonly targetParticleCount: number;
 
@@ -54,6 +56,7 @@ export class PhantomRenderer {
     canvas: HTMLCanvasElement,
     private params: BezierParams,
   ) {
+    this.canvas = canvas;
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("Canvas 2D 不可用");
     this.ctx = ctx;
@@ -107,8 +110,8 @@ export class PhantomRenderer {
       const elapsed = (performance.now() - this.previewStartTime) / 1000;
       // 亮度呼吸：基值 0.55 + 0.45·sin(2π·f·elapsed)，f≈0.75Hz（2 秒约 1.5 个周期）
       const brightnessScale = 0.55 + 0.45 * Math.sin(2 * Math.PI * 0.75 * elapsed);
-      const w = CONFIG.canvasWidth;
-      const h = CONFIG.canvasHeight;
+      const w = this.canvas.width;
+      const h = this.canvas.height;
       const img = this.ctx.createImageData(w, h);
       this.paintFullNoise(img.data);
       this.stampCluster(img.data, center, Math.max(0.1, brightnessScale));
@@ -127,8 +130,10 @@ export class PhantomRenderer {
   /** 渲染单帧。t∈[0,1] 为路径归一化进度。 */
   private renderFrame(t: number): void {
     const { ctx } = this;
-    const w = CONFIG.canvasWidth;
-    const h = CONFIG.canvasHeight;
+    // 画布尺寸以 canvas.width/height 为准（PC/Mobile 不同，由 phantom.ts 按视口设置），
+    // 不再读 CONFIG 全局值，避免与实际 buffer 尺寸不一致。
+    const w = this.canvas.width;
+    const h = this.canvas.height;
 
     // 一次 createImageData，背景与目标簇写入同一缓冲后统一落盘（60fps 友好）
     const img = ctx.createImageData(w, h);
@@ -154,8 +159,8 @@ export class PhantomRenderer {
     center: [number, number],
     brightnessScale: number,
   ): void {
-    const w = CONFIG.canvasWidth;
-    const h = CONFIG.canvasHeight;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
     const half = this.params.targetHalf;
     const left = center[0] - half;
     const top = center[1] - half;
@@ -184,9 +189,9 @@ export class PhantomRenderer {
 
   /** 画一帧纯随机噪点（无残留目标信息）。暂停态 / 初始态共用。 */
   drawStaticNoise(): void {
-    const { ctx } = this;
-    const w = CONFIG.canvasWidth;
-    const h = CONFIG.canvasHeight;
+    const { ctx, canvas } = this;
+    const w = canvas.width;
+    const h = canvas.height;
     const img = ctx.createImageData(w, h);
     this.paintFullNoise(img.data);
     ctx.putImageData(img, 0, 0);

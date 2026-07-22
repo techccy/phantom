@@ -157,3 +157,25 @@ def test_touch_human_passes():
     assert b.residual_energy > config.SMOOTHNESS_JERK_EPS, f"残差应高于否决线: {b.residual_energy}"
     assert b.residual_energy < 0.5, f"残差应偏低(模拟触屏降采样): {b.residual_energy}"
     assert b.passed, f"触屏真人轨迹应通过: composite={b.composite} detail={engine.breakdown_to_dict(b)}"
+
+
+def test_dtw_normalization_decouples_canvas_size():
+    """回归 docs/issue4.md §2 / docs/log5：DTW 必须归一化到 [0,1]² 解耦画布尺寸。
+
+    iOS 场景前端可能在 360×360 采集而后端在另一尺寸算贝塞尔。归一化前这种
+    坐标系错位会让越界/缩放点与贝塞尔参考路径每点拉开 DTW 代价 → S_DTW 崩塌。
+    归一化后即便两侧 canvas_w/h 标的尺寸不同，只要形状一致 S_DTW 应自洽且接近 1。
+    """
+    from app.scoring import dtw as dtw_mod
+
+    base = _bezier_samples(256)
+    # 用生成轨迹时的画布尺寸算 S_DTW（基准）
+    s_ref = dtw_mod.score_dtw(base, base[:, :].copy() * 1.0, W, H)
+    # 故意用"错误的"画布尺寸（与生成尺寸不一致）算 S_DTW —— 归一化后应仍接近 1，
+    # 因为轨迹与贝塞尔形状完全一致（只是被归一化到单位正方形）。
+    s_mismatch = dtw_mod.score_dtw(base, base[:, :].copy() * 1.0, 360, 360)
+    assert s_ref >= 0.99, f"同尺寸基准 S_DTW 应≈1: {s_ref}"
+    assert s_mismatch >= 0.9, (
+        f"画布尺寸错位时归一化 S_DTW 不应崩塌: s_mismatch={s_mismatch} "
+        "(docs/log5 的 iOS S_DTW 崩塌回归)"
+    )

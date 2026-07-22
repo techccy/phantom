@@ -51,7 +51,8 @@ async def create_challenge(req: models.ChallengeRequest):
         raise HTTPException(400, "unsupported curve")
 
     challenge_id, redis_value, payload = challenge.create_challenge(
-        req.clientPublicJwk
+        req.clientPublicJwk,
+        device=req.device,
     )
     await store.save_challenge(challenge_id, redis_value)
     return models.ChallengeResponse(**payload)

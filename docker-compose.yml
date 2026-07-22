@@ -37,12 +37,19 @@ services:
       PHANTOM_TOKEN_SECRET: ${PHANTOM_TOKEN_SECRET:-}
       # 调试模式：设为 true 后后端日志打印每次校验的采集轨迹与原分属明细。生产务必留空/置 false。
       PHANTOM_DEBUG: ${PHANTOM_DEBUG:-false}
-      # 画布尺寸：后端按此生成贝塞尔路径（与前端 VITE_CANVAS_* 单一来源，见 frontend.build.args）
+      # 画布尺寸：PC/Mobile 分别配置（docs/issue3.md §2/§4）。前端按视口传 device，
+      # 后端据此选 PHANTOM_CANVAS_*_PC/MOBILE。旧 PHANTOM_CANVAS_W/H 仍作 PC 兜底。
       PHANTOM_CANVAS_W: ${PHANTOM_CANVAS_W:-480}
       PHANTOM_CANVAS_H: ${PHANTOM_CANVAS_H:-480}
-      PHANTOM_CHALLENGE_DURATION: ${PHANTOM_CHALLENGE_DURATION:-5.0}
+      PHANTOM_CANVAS_W_PC: ${PHANTOM_CANVAS_W_PC:-}
+      PHANTOM_CANVAS_H_PC: ${PHANTOM_CANVAS_H_PC:-}
+      PHANTOM_CANVAS_W_MOBILE: ${PHANTOM_CANVAS_W_MOBILE:-360}
+      PHANTOM_CANVAS_H_MOBILE: ${PHANTOM_CANVAS_H_MOBILE:-360}
+      PHANTOM_CHALLENGE_DURATION: ${PHANTOM_CHALLENGE_DURATION:-6.0}
       # 以下全部可选，留空走 config.py 内置默认值；详细说明见 backend/.env.example
       PHANTOM_TARGET_HALF: ${PHANTOM_TARGET_HALF:-}
+      PHANTOM_TARGET_HALF_PC: ${PHANTOM_TARGET_HALF_PC:-}
+      PHANTOM_TARGET_HALF_MOBILE: ${PHANTOM_TARGET_HALF_MOBILE:-30}
       PHANTOM_FPS: ${PHANTOM_FPS:-}
       PHANTOM_PASS_THRESHOLD: ${PHANTOM_PASS_THRESHOLD:-}
       PHANTOM_W_JERK: ${PHANTOM_W_JERK:-}
@@ -81,9 +88,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # 画布尺寸从同一 PHANTOM_CANVAS_W/H 取值，保证与后端一致（单一来源）
-        VITE_CANVAS_W: ${PHANTOM_CANVAS_W:-480}
-        VITE_CANVAS_H: ${PHANTOM_CANVAS_H:-480}
+        # 画布尺寸 PC/Mobile 分别配置（docs/issue3.md §2/§4），与后端 PHANTOM_CANVAS_*_PC/MOBILE
+        # 单一来源。PC 兜底沿用旧 PHANTOM_CANVAS_W/H，向后兼容已部署配置。
+        VITE_CANVAS_W_PC: ${PHANTOM_CANVAS_W_PC:-${PHANTOM_CANVAS_W:-480}}
+        VITE_CANVAS_H_PC: ${PHANTOM_CANVAS_H_PC:-${PHANTOM_CANVAS_H:-480}}
+        VITE_CANVAS_W_MOBILE: ${PHANTOM_CANVAS_W_MOBILE:-360}
+        VITE_CANVAS_H_MOBILE: ${PHANTOM_CANVAS_H_MOBILE:-360}
         VITE_API_BASE: ${VITE_API_BASE:-}
         VITE_PARTICLE_DENSITY: ${VITE_PARTICLE_DENSITY:-0.6}
         VITE_PARTICLE_DROP_RATE: ${VITE_PARTICLE_DROP_RATE:-0.05}

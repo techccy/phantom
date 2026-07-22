@@ -13,7 +13,7 @@
 //   - 不再在浏览器侧自动调用 /consume-token 核销 token。token 通过 onSuccess
 //     回调交给接入方，由接入方后端在自己的业务流程里核销（见接入文档）。
 
-import { CONFIG } from "./config";
+import { CONFIG, isMobileViewport } from "./config";
 import {
   requestChallenge,
   submitVerify,
@@ -86,6 +86,9 @@ class WidgetSession {
   private duration = 3;
   /** 失败→重试 的延迟计时器，destroy/reset 时清理。 */
   private retryTimer = 0;
+  /** 本题对应的端类型（pc/mobile），在 start() 里按视口确定后下发给后端，
+   * 让后端据此选择 canvas_w/h 与 target_half。 */
+  private device: "pc" | "mobile" = "pc";
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -99,8 +102,13 @@ class WidgetSession {
   ) {}
 
   async start(): Promise<void> {
-    this.canvas.width = CONFIG.canvasWidth;
-    this.canvas.height = CONFIG.canvasHeight;
+    // 画布尺寸按视口 PC/Mobile 区分（docs/issue3.md §2/§4）。
+    // ⚠️ 必须与后端按同一 device 选出的 PHANTOM_CANVAS_*_PC/MOBILE 一致，
+    // 否则后端 DTW 归一化用的 canvas_w/h 会与前端渲染尺寸错位（见下方 device 传参）。
+    const mobile = isMobileViewport();
+    this.device = mobile ? "mobile" : "pc";
+    this.canvas.width = mobile ? CONFIG.canvasWidthMobile : CONFIG.canvasWidthPC;
+    this.canvas.height = mobile ? CONFIG.canvasHeightMobile : CONFIG.canvasHeightPC;
     this.status.textContent = "正在准备验证题…";
     // 加载态：遮罩隐藏，避免遮挡空白 canvas
     this.overlay.classList.add("phantom-hidden");
@@ -109,7 +117,7 @@ class WidgetSession {
     try {
       // 1) 协商会话密钥 + 取题
       const { privateKey, publicJwk } = await generateClientKeyPair();
-      const challenge = await requestChallenge(this.apiBase, publicJwk);
+      const challenge = await requestChallenge(this.apiBase, publicJwk, this.device);
       const serverPub = await importServerPublic(challenge.serverPublicJwk);
       this.sessionKey = await deriveSessionKey(
         privateKey,

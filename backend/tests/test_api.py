@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from fastapi.testclient import TestClient
 
-from app import challenge, crypto, main, models
+from app import challenge, config, crypto, main, models
 from tests.test_scoring import _human_trajectory, CP, W, H  # 复用合成轨迹
 
 
@@ -138,6 +138,34 @@ def test_invalid_curve_rejected(client):
     jwk = {"kty": "EC", "crv": "P-384", "x": "a", "y": "b"}
     r = client.post("/challenge", json={"clientPublicJwk": jwk})
     assert r.status_code == 400
+
+
+def test_device_selects_mobile_canvas(client):
+    """device=mobile 时后端应按 Mobile 画布/目标方块尺寸下发（docs/issue3.md §2/§4）。"""
+    jwk, priv = _client_keypair()
+    r = client.post("/challenge", json={"clientPublicJwk": jwk, "device": "mobile"})
+    assert r.status_code == 200
+    payload = r.json()
+    salt = crypto.b64u_decode(payload["salt"])
+    session_key = _derive_client_session(priv, payload["serverPublicJwk"], salt)
+    params = _decrypt_params(session_key, payload)
+    assert params["canvas"]["w"] == config.CANVAS_WIDTH_MOBILE
+    assert params["canvas"]["h"] == config.CANVAS_HEIGHT_MOBILE
+    assert params["targetHalf"] == config.TARGET_HALF_MOBILE
+
+
+def test_device_defaults_to_pc(client):
+    """device 缺省时走 PC 默认（向后兼容旧 SDK）。"""
+    jwk, priv = _client_keypair()
+    r = client.post("/challenge", json={"clientPublicJwk": jwk})
+    assert r.status_code == 200
+    payload = r.json()
+    salt = crypto.b64u_decode(payload["salt"])
+    session_key = _derive_client_session(priv, payload["serverPublicJwk"], salt)
+    params = _decrypt_params(session_key, payload)
+    assert params["canvas"]["w"] == config.CANVAS_WIDTH_PC
+    assert params["canvas"]["h"] == config.CANVAS_HEIGHT_PC
+    assert params["targetHalf"] == config.TARGET_HALF_PC
 
 
 # ---- helpers ----

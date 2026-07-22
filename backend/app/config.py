@@ -53,9 +53,17 @@ CHALLENGE_TTL_SECONDS: int = _env_int("PHANTOM_CHALLENGE_TTL", 120)
 TOKEN_TTL_SECONDS: int = _env_int("PHANTOM_TOKEN_TTL", 300)
 
 # 画布（与前端约定，仅作为路径生成与归一化参考，可被 challenge 覆盖）
+# PC / 移动端分别配置（docs/issue3.md §2/§4）：
+#   - PC 默认 480×480（鼠标 1px 精准）
+#   - Mobile 默认 360×360（窄屏 + 大拇指接触面更友好）
+# 旧字段 CANVAS_WIDTH/HEIGHT 保留为 PC 兜底默认，向后兼容已部署配置。
 CANVAS_WIDTH: int = _env_int("PHANTOM_CANVAS_W", 480)
 CANVAS_HEIGHT: int = _env_int("PHANTOM_CANVAS_H", 480)
-CHALLENGE_DURATION_SECONDS: float = _env_float("PHANTOM_CHALLENGE_DURATION", 5.0)
+CANVAS_WIDTH_PC: int = _env_int("PHANTOM_CANVAS_W_PC", CANVAS_WIDTH)
+CANVAS_HEIGHT_PC: int = _env_int("PHANTOM_CANVAS_H_PC", CANVAS_HEIGHT)
+CANVAS_WIDTH_MOBILE: int = _env_int("PHANTOM_CANVAS_W_MOBILE", 360)
+CANVAS_HEIGHT_MOBILE: int = _env_int("PHANTOM_CANVAS_H_MOBILE", 360)
+CHALLENGE_DURATION_SECONDS: float = _env_float("PHANTOM_CHALLENGE_DURATION", 6.0)
 
 # ---- 时效（手册 §四.2：防止离线慢算）----
 MAX_DRIFT_SECONDS: float = _env_float("PHANTOM_MAX_DRIFT_SECONDS", 3.0)
@@ -120,12 +128,20 @@ TREMOR_PSD_MID: float = _env_float("PHANTOM_TREMOR_PSD_MID", 0.13)
 W_TREMOR_AMP: float = _env_float("PHANTOM_W_TREMOR_AMP", 0.5)
 W_TREMOR_PSD: float = _env_float("PHANTOM_W_TREMOR_PSD", 0.5)
 
-# ---- DTW 方向拟合衰减尺度（手册 §四.1）----
-# 平均每点偏差占对角线 DTW_D_REF_RATIO 时 S≈0.37；越大越宽松
+# ---- DTW 方向拟合衰减尺度（手册 §四.1；docs/issue4.md §2）----
+# 用户轨迹与贝塞尔均先归一化到 [0,1]² 再算 DTW，每点偏差占单位正方形对角线（√2）
+# 此比例时 S_DTW≈0.37；越大越宽松。归一化后 S_DTW 与画布尺寸解耦，
+# 杜绝前后端画布不一致导致的 S_DTW 崩塌。
 DTW_D_REF_RATIO: float = _env_float("PHANTOM_DTW_D_REF_RATIO", 0.15)
 
 # ---- Challenge 视觉参数（下发前端）----
-TARGET_HALF: int = _env_int("PHANTOM_TARGET_HALF", 22)   # 目标方块半边长（画布相对）
+# 目标方块半边长（画布相对）。PC / 移动端分别配置（docs/issue3.md §4）：
+#   - PC 鼠标精准，22px 半长（44px 方块）足够
+#   - Mobile 大拇指接触面 10–15mm，半长放宽到 30px（60px 方块）以减少脱靶
+# 旧字段 TARGET_HALF 保留为 PC 兜底默认。
+TARGET_HALF: int = _env_int("PHANTOM_TARGET_HALF", 22)
+TARGET_HALF_PC: int = _env_int("PHANTOM_TARGET_HALF_PC", TARGET_HALF)
+TARGET_HALF_MOBILE: int = _env_int("PHANTOM_TARGET_HALF_MOBILE", 30)
 FPS: int = _env_int("PHANTOM_FPS", 60)                   # 帧率（仅作约定下发给前端）
 
 # ---- 轨迹有效性下限 ----
