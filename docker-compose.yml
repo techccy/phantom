@@ -87,6 +87,8 @@ services:
         VITE_PARTICLE_DROP_RATE: ${VITE_PARTICLE_DROP_RATE:-0.05}
         VITE_PARTICLE_BRIGHTNESS: ${VITE_PARTICLE_BRIGHTNESS:-0.55}
         VITE_PARTICLE_BRIGHTNESS_VAR: ${VITE_PARTICLE_BRIGHTNESS_VAR:-0.45}
+        # 预热脉冲时长（秒）：按住后方块先在起点显影这段时间再出发
+        VITE_PREVIEW_SECONDS: ${VITE_PREVIEW_SECONDS:-2}
     container_name: phantom-frontend
     depends_on: [backend]
     ports:

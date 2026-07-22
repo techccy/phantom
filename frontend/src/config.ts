@@ -22,4 +22,8 @@ export const CONFIG = {
   particleDropRate: envNum("VITE_PARTICLE_DROP_RATE", 0.05),   // 反密度分析：每帧随机丢弃比例
   particleBrightness: envNum("VITE_PARTICLE_BRIGHTNESS", 0.55), // 目标簇亮度基值（0~1）
   particleBrightnessVar: envNum("VITE_PARTICLE_BRIGHTNESS_VAR", 0.45), // 亮度随机闪烁幅度
+
+  // 预热脉冲时长（秒）：按住按钮后，方块先在起点原地显影这段时间再出发，
+  // 方便用户熟悉方块位置。通过 VITE_PREVIEW_SECONDS 注入，改后需重新 build 前端。
+  previewSeconds: envNum("VITE_PREVIEW_SECONDS", 2),
 };

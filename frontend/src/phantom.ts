@@ -58,8 +58,9 @@ export interface PhantomHandle {
 
 const VERSION = "0.1.0";
 
-/** 预热脉冲时长（毫秒）：按住后先显影方块这段时间，方便用户熟悉方块位置。 */
-const PREVIEW_MS = 2000;
+/** 预热脉冲时长（毫秒）：按住后先显影方块这段时间，方便用户熟悉方块位置。
+ *  时长来自 CONFIG.previewSeconds（由 VITE_PREVIEW_SECONDS 注入，可调）。 */
+const PREVIEW_MS = CONFIG.previewSeconds * 1000;
 
 /** 把字符串或 HTMLElement 解析为容器元素。 */
 function resolveContainer(el: string | HTMLElement): HTMLElement {
@@ -317,7 +318,7 @@ export function mount(
   overlay.className = "phantom-overlay phantom-hidden";
   const overlayText = document.createElement("div");
   overlayText.className = "phantom-overlay-text";
-  overlayText.innerHTML = "按住下方按钮不放<br>先熟悉方块位置<br>方块出发后跟随移动";
+  overlayText.innerHTML = "按住下方按钮<br>拖动到闪烁方块处<br>方块出发后跟随移动<br>方块停止则松手";
   overlay.appendChild(overlayText);
 
   stageWrap.appendChild(canvas);
