@@ -35,6 +35,8 @@ services:
       PHANTOM_CORS_ORIGINS: ${PHANTOM_CORS_ORIGINS:-http://localhost,http://localhost:8088}
       # ⚠️ 生产部署：注入稳定随机密钥（>=32 字节），多 worker 才能一致校验 token
       PHANTOM_TOKEN_SECRET: ${PHANTOM_TOKEN_SECRET:-}
+      # 调试模式：设为 true 后后端日志打印每次校验的采集轨迹与原分属明细。生产务必留空/置 false。
+      PHANTOM_DEBUG: ${PHANTOM_DEBUG:-false}
       # 画布尺寸：后端按此生成贝塞尔路径（与前端 VITE_CANVAS_* 单一来源，见 frontend.build.args）
       PHANTOM_CANVAS_W: ${PHANTOM_CANVAS_W:-480}
       PHANTOM_CANVAS_H: ${PHANTOM_CANVAS_H:-480}

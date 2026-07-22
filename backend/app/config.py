@@ -26,7 +26,17 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 # ---- 基础设施 ----
+# 调试模式：开启后在后端日志打印每次 /verify 的全部采集轨迹与原分属明细。
+# 仅用于排查问题，生产请保持关闭（会泄露用户轨迹与评分细节）。
+DEBUG: bool = _env_bool("PHANTOM_DEBUG", False)
 REDIS_URL: str = os.environ.get("PHANTOM_REDIS_URL", "redis://localhost:6379/0")
 CORS_ORIGINS: list[str] = [
     o.strip()
