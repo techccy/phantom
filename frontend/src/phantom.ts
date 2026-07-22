@@ -58,6 +58,9 @@ export interface PhantomHandle {
 
 const VERSION = "0.1.0";
 
+/** 预热脉冲时长（毫秒）：按住后先显影方块这段时间，方便用户熟悉方块位置。 */
+const PREVIEW_MS = 2000;
+
 /** 把字符串或 HTMLElement 解析为容器元素。 */
 function resolveContainer(el: string | HTMLElement): HTMLElement {
   const node = typeof el === "string" ? document.querySelector(el) : el;
@@ -75,6 +78,9 @@ class WidgetSession {
   private challengeId = "";
   private collecting = false;
   private finished = false;
+  /** 预热脉冲态：按住后先在起点原地显影方块 2 秒，方便用户熟悉方块位置。 */
+  private previewing = false;
+  private previewTimer = 0;
   /** 本题路径时长（秒），来自后端解密参数，用于按钮充能进度条对齐渲染结束时刻。 */
   private duration = 3;
   /** 失败→重试 的延迟计时器，destroy/reset 时清理。 */
@@ -139,17 +145,41 @@ class WidgetSession {
 
   private bindInteraction(): void {
     const onDown = (): void => {
-      if (this.collecting || this.finished) return;
-      this.collecting = true;
-      // 按下瞬间：隐藏玩法遮罩，启动动态显影 + 轨迹采集，
-      // 按钮进入 Holding 态（霓虹充能 + 进度条跑动，动画每次重新播放）
+      if (this.collecting || this.previewing || this.finished) return;
+      // 预热态：按住瞬间先在起点原地显影方块 2 秒，方便用户熟悉方块位置。
+      // 此阶段只做脉冲呼吸显影，不采集、不出发路径、不进入充能态。
+      this.previewing = true;
       this.overlay.classList.add("phantom-hidden");
-      this.activateBtn.classList.add("phantom-holding");
+      this.status.textContent = "准备跟随";
+      this.renderer?.startPreview();
+      this.previewTimer = window.setTimeout(beginCollect, PREVIEW_MS);
+    };
+    // 2 秒预热结束：方块从起点出发，同步启动轨迹采集 + 按钮充能态。
+    // renderer.start() 与 tracker.start() 严格同步 → 采集起点对齐 t=0，
+    // 后端 DTW/评分与改前完全一致。
+    const beginCollect = (): void => {
+      if (!this.previewing || this.finished) return;
+      this.previewing = false;
+      this.collecting = true;
+      this.status.textContent = "";
+      this.renderer?.stopPreview();
       this.renderer?.start();
       this.tracker?.start();
+      // 充能进度条此时才开始（动画时长仍对齐 --ph-charge-duration = duration）
+      this.activateBtn.classList.add("phantom-holding");
     };
     const onUp = (): void => {
-      if (!this.collecting || this.finished) return;
+      if (this.finished) return;
+      // 预热中松手：取消预热、回到就绪态，不提交。
+      if (this.previewing) {
+        window.clearTimeout(this.previewTimer);
+        this.previewing = false;
+        this.renderer?.stopPreview();
+        this.renderer?.drawStaticNoise();
+        this.status.textContent = "";
+        return;
+      }
+      if (!this.collecting) return;
       this.collecting = false;
       // 松手即停：进度条定格，渲染退化为纯噪点
       this.activateBtn.classList.remove("phantom-holding");
@@ -245,6 +275,9 @@ class WidgetSession {
   destroy(): void {
     this._unbind();
     window.clearTimeout(this.retryTimer);
+    window.clearTimeout(this.previewTimer);
+    this.previewing = false;
+    this.renderer?.stopPreview();
     this.renderer?.stop();
     this.tracker?.stop();
   }
@@ -284,7 +317,7 @@ export function mount(
   overlay.className = "phantom-overlay phantom-hidden";
   const overlayText = document.createElement("div");
   overlayText.className = "phantom-overlay-text";
-  overlayText.innerHTML = "按住下方按钮不放<br>拖动跟随移动的部分<br>停止后松手";
+  overlayText.innerHTML = "按住下方按钮不放<br>先熟悉方块位置<br>方块出发后跟随移动";
   overlay.appendChild(overlayText);
 
   stageWrap.appendChild(canvas);
