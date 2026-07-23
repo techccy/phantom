@@ -217,6 +217,74 @@ export function injectStyles(): void {
   color: var(--ph-fg);
   min-height: 20px;
 }
+
+/* ---------- 阶段提示框（画布上方常规流，非覆盖画布） ----------
+   参考 design-os 的 eyebrow：带柔光状态点 + 阶段文案，随状态机切换。
+   data-stage 控制状态点颜色/动画；空文案时不画点。 */
+.phantom-widget .phantom-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--ph-border);
+  border-radius: var(--ph-radius);
+  background: var(--ph-btn-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ph-fg);
+  transition: border-color 0.2s ease;
+}
+.phantom-widget .phantom-hint::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ph-accent);
+  box-shadow: 0 0 0 3px var(--ph-accent-soft);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+/* loading / 空文案：不画状态点 */
+.phantom-widget .phantom-hint:empty::before {
+  display: none;
+}
+/* 预热阶段：状态点呼吸（呼应方块呼吸显影） */
+.phantom-widget .phantom-hint[data-stage="preview"]::before {
+  animation: phantom-hint-pulse 1s ease-in-out infinite;
+}
+@keyframes phantom-hint-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--ph-accent-soft); }
+  50% { box-shadow: 0 0 0 6px var(--ph-accent-soft); }
+}
+/* 停止移动阶段：状态点转翡翠绿，提示"该松手了" */
+.phantom-widget .phantom-hint[data-stage="stopped"]::before {
+  background: var(--ph-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ph-success) 30%, transparent);
+}
+
+/* ---------- 版权 / 仓库信息（widget 最底部） ---------- */
+.phantom-widget .phantom-footer {
+  margin-top: 2px;
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: var(--ph-fg);
+  opacity: 0.6;
+  text-align: center;
+}
+.phantom-widget .phantom-footer a {
+  color: var(--ph-accent);
+  transition: text-decoration 0.15s ease;
+}
+.phantom-widget .phantom-footer a:hover {
+  text-decoration: underline;
+}
 `.trim();
   document.head.appendChild(style);
   injected = true;

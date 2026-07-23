@@ -71,6 +71,9 @@ function resolveContainer(el: string | HTMLElement): HTMLElement {
   return node;
 }
 
+/** 阶段提示框的阶段标识（控制状态点颜色/动画）。 */
+type HintStage = "loading" | "ready" | "preview" | "collect" | "stopped" | "done";
+
 /** 内部状态机：封装一次"拉题→渲染→采集→提交"的生命周期。 */
 class WidgetSession {
   private renderer: PhantomRenderer | null = null;
@@ -95,11 +98,18 @@ class WidgetSession {
     private apiBase: string,
     private status: HTMLElement,
     private overlay: HTMLElement,
+    private hint: HTMLElement,
     private activateBtn: HTMLButtonElement,
     private onResult: (r: VerifyResult) => void,
     private onError: (e: Error) => void,
     private onRetry: () => void,
   ) {}
+
+  /** 更新阶段提示框：设置阶段标识（控制状态点样式）与文案（空串则隐藏点）。 */
+  private setHint(stage: HintStage, text: string): void {
+    this.hint.setAttribute("data-stage", stage);
+    this.hint.textContent = text;
+  }
 
   async start(): Promise<void> {
     // 画布尺寸按视口 PC/Mobile 区分（docs/issue3.md §2/§4）。
@@ -110,8 +120,9 @@ class WidgetSession {
     this.canvas.width = mobile ? CONFIG.canvasWidthMobile : CONFIG.canvasWidthPC;
     this.canvas.height = mobile ? CONFIG.canvasHeightMobile : CONFIG.canvasHeightPC;
     this.status.textContent = "正在准备验证题…";
-    // 加载态：遮罩隐藏，避免遮挡空白 canvas
+    // 加载态：遮罩隐藏，避免遮挡空白 canvas；阶段提示框清空
     this.overlay.classList.add("phantom-hidden");
+    this.setHint("loading", "");
     this.activateBtn.disabled = true;
 
     try {
@@ -141,6 +152,7 @@ class WidgetSession {
       // 进度条充能时长与后端下发的路径时长对齐（充能结束 ≈ 渲染结束）。
       this.activateBtn.style.setProperty("--ph-charge-duration", `${this.duration}s`);
       this.status.textContent = "";
+      this.setHint("ready", "按住下方按钮并马上拖动到方块");
       this.activateBtn.disabled = false;
       this.renderer.drawStaticNoise();
       // 题目就绪：显示玩法遮罩，用户按下即隐藏（见 bindInteraction.onDown）
@@ -159,7 +171,7 @@ class WidgetSession {
       // 此阶段只做脉冲呼吸显影，不采集、不出发路径、不进入充能态。
       this.previewing = true;
       this.overlay.classList.add("phantom-hidden");
-      this.status.textContent = "准备跟随";
+      this.setHint("preview", "移动到闪烁的方块等待启动");
       this.renderer?.startPreview();
       this.previewTimer = window.setTimeout(beginCollect, PREVIEW_MS);
     };
@@ -171,8 +183,12 @@ class WidgetSession {
       this.previewing = false;
       this.collecting = true;
       this.status.textContent = "";
+      this.setHint("collect", "跟随方块移动");
       this.renderer?.stopPreview();
-      this.renderer?.start();
+      // onTick：路径走到 t=1（方块停在终点）只触发一次 → 切换"松手"提示。
+      this.renderer?.start((_center, t) => {
+        if (t >= 1) this.setHint("stopped", "松手");
+      });
       this.tracker?.start();
       // 充能进度条此时才开始（动画时长仍对齐 --ph-charge-duration = duration）
       this.activateBtn.classList.add("phantom-holding");
@@ -186,13 +202,15 @@ class WidgetSession {
         this.renderer?.stopPreview();
         this.renderer?.drawStaticNoise();
         this.status.textContent = "";
+        this.setHint("ready", "按住下方按钮并马上拖动到方块");
         return;
       }
       if (!this.collecting) return;
       this.collecting = false;
-      // 松手即停：进度条定格，渲染退化为纯噪点
+      // 松手即停：进度条定格，渲染退化为纯噪点；提示框清空（结果交给按钮表达）
       this.activateBtn.classList.remove("phantom-holding");
       this.renderer?.pause();
+      this.setHint("done", "");
       const samples = this.tracker?.stop() ?? [];
       void this.verifyAndFinish(samples);
     };
@@ -326,11 +344,17 @@ export function mount(
   overlay.className = "phantom-overlay phantom-hidden";
   const overlayText = document.createElement("div");
   overlayText.className = "phantom-overlay-text";
-  overlayText.innerHTML = "按住下方按钮<br>拖动到闪烁方块处<br>方块出发后跟随移动<br>方块停止则松手";
+  overlayText.innerHTML = "按住下方按钮<br>马上拖动到闪烁方块处<br>方块出发后跟随移动<br>方块停止则松手";
   overlay.appendChild(overlayText);
 
   stageWrap.appendChild(canvas);
   stageWrap.appendChild(overlay);
+
+  // 阶段提示框：画布上方常规流元素（不覆盖画布），随状态机切换 4 阶段文案。
+  // 参考 design-os 的 eyebrow：带柔光状态点 + 文案。
+  const hint = document.createElement("div");
+  hint.className = "phantom-hint";
+  hint.setAttribute("data-stage", "loading");
 
   const activateBtn = document.createElement("button");
   activateBtn.className = "phantom-activate";
@@ -346,9 +370,18 @@ export function mount(
   status.className = "phantom-status";
   status.textContent = "正在准备验证题…";
 
+  root.appendChild(hint);
   root.appendChild(stageWrap);
   root.appendChild(activateBtn);
   root.appendChild(status);
+
+  // 版权 / 仓库信息（widget 最底部）
+  const footer = document.createElement("div");
+  footer.className = "phantom-footer";
+  footer.innerHTML =
+    'techccy/<a href="https://github.com/techccy/phantom" target="_blank" rel="noopener">phantom</a>）';
+  root.appendChild(footer);
+
   container.appendChild(root);
 
   const dispatch = (r: VerifyResult): void => {
@@ -374,6 +407,7 @@ export function mount(
       opts.apiBase,
       status,
       overlay,
+      hint,
       activateBtn,
       dispatch,
       (e) => opts.onError?.(e),
@@ -387,6 +421,7 @@ export function mount(
     opts.apiBase,
     status,
     overlay,
+    hint,
     activateBtn,
     dispatch,
     (e) => opts.onError?.(e),
