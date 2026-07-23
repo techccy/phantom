@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 
 from fastapi import FastAPI, HTTPException, status
@@ -17,6 +18,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import challenge, config, crypto, models, scoring, store
 
 app = FastAPI(title="Phantom", version="0.1.0")
+
+# 调试日志：开启后（PHANTOM_DEBUG=1）打印每次 /verify 的采集轨迹与原分属明细。
+logger = logging.getLogger("phantom")
+if config.DEBUG:
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
+    logger.setLevel(logging.DEBUG)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
@@ -44,7 +51,8 @@ async def create_challenge(req: models.ChallengeRequest):
         raise HTTPException(400, "unsupported curve")
 
     challenge_id, redis_value, payload = challenge.create_challenge(
-        req.clientPublicJwk
+        req.clientPublicJwk,
+        device=req.device,
     )
     await store.save_challenge(challenge_id, redis_value)
     return models.ChallengeResponse(**payload)
@@ -81,6 +89,25 @@ async def verify(req: models.VerifyRequest):
     ys = [p[1] for p in points]
     ts = [p[2] for p in points]
 
+    # [DEBUG] 采集到的数据：完整轨迹、时效、题面参数
+    if config.DEBUG:
+        logger.debug(
+            "[verify] 采集数据 challenge_id=%s n_points=%d last_point_t_ms=%d drift_s=%.3f "
+            "canvas=%sx%s control_points=%s",
+            req.challengeId,
+            len(points),
+            last_point_t,
+            drift_s,
+            record.get("canvas_w"),
+            record.get("canvas_h"),
+            record.get("control_points"),
+        )
+        logger.debug(
+            "[verify] 轨迹明细 challenge_id=%s points=%s",
+            req.challengeId,
+            points,
+        )
+
     # 4) 评分
     breakdown = scoring.engine.score_trajectory(
         xs,
@@ -91,6 +118,30 @@ async def verify(req: models.VerifyRequest):
         record["canvas_h"],
     )
     detail = scoring.engine.breakdown_to_dict(breakdown)
+
+    # [DEBUG] 原分属：综合分 + DTW/Bio 子分 + 各生理特征与子项
+    if config.DEBUG:
+        logger.debug(
+            "[verify] 原分属 challenge_id=%s passed=%s composite=%.4f s_dtw=%.4f s_bio=%.4f "
+            "smoothness_veto=%s residual_energy=%.5f jerk_variance=%.5f "
+            "accel_zerocrossings=%d tremor_amplitude_px=%.5f psd_8_12_ratio=%.5f "
+            "energy_score=%.4f zc_score=%.4f tremor_score=%.4f extras=%s",
+            req.challengeId,
+            breakdown.passed,
+            breakdown.composite,
+            breakdown.s_dtw,
+            breakdown.s_bio,
+            breakdown.smoothness_veto,
+            breakdown.residual_energy,
+            breakdown.jerk_variance,
+            breakdown.accel_zerocrossings,
+            breakdown.tremor_amplitude_px,
+            breakdown.psd_8_12_ratio,
+            breakdown.energy_score,
+            breakdown.zc_score,
+            breakdown.tremor_score,
+            breakdown.extras,
+        )
 
     # 5) 通过则签发一次性 token
     token = None

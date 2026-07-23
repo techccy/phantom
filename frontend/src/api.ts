@@ -36,8 +36,11 @@ async function postJson<T>(apiBase: string, path: string, body: unknown): Promis
 export function requestChallenge(
   apiBase: string,
   clientPublicJwk: JsonWebKey,
+  device?: "pc" | "mobile",
 ): Promise<ChallengePayload> {
-  return postJson(apiBase, "/challenge", { clientPublicJwk });
+  // device 用于后端按端选择 canvas_w/h 与 target_half（docs/issue3.md §2/§4）。
+  // 缺省时不传，后端走 PC 默认，保持对旧 SDK 的向后兼容。
+  return postJson(apiBase, "/challenge", device ? { clientPublicJwk, device } : { clientPublicJwk });
 }
 
 export function submitVerify(

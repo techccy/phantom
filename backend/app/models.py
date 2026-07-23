@@ -13,6 +13,9 @@ class ChallengeRequest(BaseModel):
     clientPublicJwk: dict[str, Any] = Field(
         ..., description="前端 ECDH P-256 临时公钥 JWK"
     )
+    # 端类型（docs/issue3.md §2/§4）：后端据此选择 PC/Mobile 的画布尺寸与目标方块半长。
+    # 可选——缺省走 PC 默认，保持对旧 SDK 的向后兼容。
+    device: Optional[str] = Field(default=None, description='"pc" | "mobile"，缺省=pc')
 
 
 class ChallengeResponse(BaseModel):

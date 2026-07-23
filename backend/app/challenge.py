@@ -39,13 +39,29 @@ def generate_bezier_path(
     return [p0, p1, p2, p3]
 
 
+def _resolve_device_params(device: str | None) -> tuple[int, int, int]:
+    """按端类型解析 (canvas_w, canvas_h, target_half)（docs/issue3.md §2/§4）。
+
+    device 为 None 或非 "mobile" 时一律走 PC 默认（向后兼容旧 SDK）。
+    """
+    if device == "mobile":
+        return config.CANVAS_WIDTH_MOBILE, config.CANVAS_HEIGHT_MOBILE, config.TARGET_HALF_MOBILE
+    return config.CANVAS_WIDTH_PC, config.CANVAS_HEIGHT_PC, config.TARGET_HALF_PC
+
+
 def create_challenge(
     client_public_jwk: dict,
-    canvas_w: int = config.CANVAS_WIDTH,
-    canvas_h: int = config.CANVAS_HEIGHT,
+    canvas_w: int | None = None,
+    canvas_h: int | None = None,
     duration: float = config.CHALLENGE_DURATION_SECONDS,
+    device: str | None = None,
 ) -> tuple[str, dict, dict]:
     """创建一个 challenge。
+
+    device ("pc"|"mobile"|None) 决定画布尺寸与目标方块半长（docs/issue3.md §2/§4）：
+    前端在 /challenge 请求里按视口传入；后端据此选 PHANTOM_CANVAS_*_PC/MOBILE 与
+    PHANTOM_TARGET_HALF_PC/MOBILE。canvas_w/canvas_h 显式入参（如非空）优先级最高，
+    便于单测覆盖。device=None 时走 PC 默认，保持对旧 SDK 的向后兼容。
 
     返回:
       challenge_id,
@@ -54,6 +70,14 @@ def create_challenge(
     """
     sess = crypto.ServerSession()
     session_key = sess.derive_with_client_public(client_public_jwk)
+
+    # 按端解析默认 canvas/target；显式入参优先（单测/调试用）
+    dw, dh, dth = _resolve_device_params(device)
+    if canvas_w is None:
+        canvas_w = dw
+    if canvas_h is None:
+        canvas_h = dh
+    target_half = dth
 
     challenge_id = str(uuid.uuid4())
     control_points = generate_bezier_path(canvas_w, canvas_h)
@@ -65,7 +89,7 @@ def create_challenge(
         "duration": duration,
         "fps": fps,
         "controlPoints": control_points,
-        "targetHalf": config.TARGET_HALF,
+        "targetHalf": target_half,
         "noiseSeed": noise_seed,
     }
     plaintext = json.dumps(params, separators=(",", ":")).encode()

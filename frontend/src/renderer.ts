@@ -43,6 +43,12 @@ export class PhantomRenderer {
   private rafId = 0;
   private running = false;
   private startTime = 0;
+  /** 预热脉冲呼吸态：方块在贝塞尔起点原地显影，亮度按 sin 呼吸。 */
+  private previewing = false;
+  private previewRafId = 0;
+  private previewStartTime = 0;
+  /** 保留 canvas 引用以读取实际 buffer 尺寸（PC/Mobile 不同）。 */
+  private readonly canvas: HTMLCanvasElement;
   /** 目标方块内每帧铺多少亮粒子（按方块面积比例，承载"共同命运"显影）。 */
   private readonly targetParticleCount: number;
 
@@ -50,6 +56,7 @@ export class PhantomRenderer {
     canvas: HTMLCanvasElement,
     private params: BezierParams,
   ) {
+    this.canvas = canvas;
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("Canvas 2D 不可用");
     this.ctx = ctx;
@@ -91,11 +98,42 @@ export class PhantomRenderer {
     this.rafId = requestAnimationFrame(loop);
   }
 
+  /** 预热脉冲：方块在贝塞尔起点（t=0）原地显影，亮度按 sin 呼吸，
+   *  供用户按下后用 2 秒熟悉方块位置；正式 start() 前调用 stopPreview()。 */
+  startPreview(): void {
+    if (this.previewing) return;
+    this.previewing = true;
+    this.previewStartTime = performance.now();
+    const center = bezierAt(this.params.controlPoints, 0);
+    const loop = (): void => {
+      if (!this.previewing) return;
+      const elapsed = (performance.now() - this.previewStartTime) / 1000;
+      // 亮度呼吸：基值 0.55 + 0.45·sin(2π·f·elapsed)，f≈0.75Hz（2 秒约 1.5 个周期）
+      const brightnessScale = 0.55 + 0.45 * Math.sin(2 * Math.PI * 0.75 * elapsed);
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+      const img = this.ctx.createImageData(w, h);
+      this.paintFullNoise(img.data);
+      this.stampCluster(img.data, center, Math.max(0.1, brightnessScale));
+      this.ctx.putImageData(img, 0, 0);
+      this.previewRafId = requestAnimationFrame(loop);
+    };
+    this.previewRafId = requestAnimationFrame(loop);
+  }
+
+  /** 停止预热脉冲（不主动重绘，由调用方决定后续画布状态）。 */
+  stopPreview(): void {
+    this.previewing = false;
+    cancelAnimationFrame(this.previewRafId);
+  }
+
   /** 渲染单帧。t∈[0,1] 为路径归一化进度。 */
   private renderFrame(t: number): void {
-    const { ctx, params } = this;
-    const w = CONFIG.canvasWidth;
-    const h = CONFIG.canvasHeight;
+    const { ctx } = this;
+    // 画布尺寸以 canvas.width/height 为准（PC/Mobile 不同，由 phantom.ts 按视口设置），
+    // 不再读 CONFIG 全局值，避免与实际 buffer 尺寸不一致。
+    const w = this.canvas.width;
+    const h = this.canvas.height;
 
     // 一次 createImageData，背景与目标簇写入同一缓冲后统一落盘（60fps 友好）
     const img = ctx.createImageData(w, h);
@@ -107,8 +145,23 @@ export class PhantomRenderer {
 
     // 2) 目标方块：在当前贝塞尔中心周围铺密集亮粒子，承载"共同命运"显影。
     //    中心逐帧沿贝塞尔推进 → 整簇共同位移 → 人眼积分成"移动的方块"。
-    const center = bezierAt(params.controlPoints, t);
-    const half = params.targetHalf;
+    const center = bezierAt(this.params.controlPoints, t);
+    this.stampCluster(data, center, 1);
+
+    ctx.putImageData(img, 0, 0);
+  }
+
+  /** 在目标方块中心周围铺密集亮粒子，承载"共同命运"显影。
+   *  brightnessScale>1 仅用于预热脉冲（呼吸提亮），正常渲染恒为 1。
+   *  写入外部 ImageData 缓冲，由调用方统一落盘。 */
+  private stampCluster(
+    data: Uint8ClampedArray,
+    center: [number, number],
+    brightnessScale: number,
+  ): void {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const half = this.params.targetHalf;
     const left = center[0] - half;
     const top = center[1] - half;
     const size = 2 * half;
@@ -120,21 +173,25 @@ export class PhantomRenderer {
       const py = (top + Math.random() * size) | 0;
       if (px < 0 || px >= w || py < 0 || py >= h) continue;
       // 亮度共同调制：偏高且小幅闪烁，单帧仍类噪点，帧间积分显出方块
-      const v = ((CONFIG.particleBrightness + CONFIG.particleBrightnessVar * Math.random()) * 255) | 0;
+      const v = Math.min(
+        255,
+        ((CONFIG.particleBrightness + CONFIG.particleBrightnessVar * Math.random()) *
+          brightnessScale *
+          255) | 0,
+      );
       const idx = (py * w + px) * 4;
       data[idx] = v;
       data[idx + 1] = v;
       data[idx + 2] = v;
       data[idx + 3] = 255;
     }
-    ctx.putImageData(img, 0, 0);
   }
 
   /** 画一帧纯随机噪点（无残留目标信息）。暂停态 / 初始态共用。 */
   drawStaticNoise(): void {
-    const { ctx } = this;
-    const w = CONFIG.canvasWidth;
-    const h = CONFIG.canvasHeight;
+    const { ctx, canvas } = this;
+    const w = canvas.width;
+    const h = canvas.height;
     const img = ctx.createImageData(w, h);
     this.paintFullNoise(img.data);
     ctx.putImageData(img, 0, 0);
