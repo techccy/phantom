@@ -10,7 +10,8 @@
     "build:sdk": "tsc --noEmit && vite build --config vite.sdk.config.ts",
     "preview": "vite preview",
     "test:interop": "node scripts/interop-test.mjs",
-    "test:fallback": "npx tsx scripts/e2e-fallback-test.ts"
+    "test:fallback": "npx tsx scripts/e2e-fallback-test.ts",
+    "test:brightness": "npx tsx scripts/brightness-test.ts"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
