@@ -100,6 +100,10 @@ services:
         VITE_API_BASE: ${VITE_API_BASE:-}
         VITE_PARTICLE_DENSITY: ${VITE_PARTICLE_DENSITY:-0.6}
         VITE_PARTICLE_DROP_RATE: ${VITE_PARTICLE_DROP_RATE:-0.05}
+        # 目标方块亮度增益：0=与背景同分布（机器逐帧看不出，人眼靠共同命运看见）；
+        # >0 额外提亮（越亮越易被机器识别，生产建议 0 或极小值）。仅影响正式动态渲染，
+        # 不影响预热脉冲的呼吸显影（预热始终明显可见）。
+        VITE_PARTICLE_TARGET_GAIN: ${VITE_PARTICLE_TARGET_GAIN:-0}
         VITE_PARTICLE_BRIGHTNESS: ${VITE_PARTICLE_BRIGHTNESS:-0.55}
         VITE_PARTICLE_BRIGHTNESS_VAR: ${VITE_PARTICLE_BRIGHTNESS_VAR:-0.45}
         # 预热脉冲时长（秒）：按住后方块先在起点显影这段时间再出发

@@ -50,6 +50,11 @@ export const CONFIG = {
   // 渲染参数（动态显影"雪花"簇）：越大越密/越亮，过大易被密度分析抠图
   particleDensity: envNum("VITE_PARTICLE_DENSITY", 0.6),       // 目标方块每像素铺多少亮粒子
   particleDropRate: envNum("VITE_PARTICLE_DROP_RATE", 0.05),   // 反密度分析：每帧随机丢弃比例
+  // 目标簇亮度增益（0~1）：0 = 粒子灰度与背景【同分布】，机器逐帧密度分析失效，
+  // 人眼仅靠"共同命运"位移整合看见方块；>0 额外提亮（便于调试/增强显影）。
+  // ⚠️ 仅作用于动态渲染（renderFrame），不影响预热脉冲的呼吸提亮（仍按固定呼吸显影）。
+  particleTargetGain: envNum("VITE_PARTICLE_TARGET_GAIN", 0),
+  // 旧亮度旋钮（保留向后兼容，新逻辑不再读取——被 particleTargetGain 取代）
   particleBrightness: envNum("VITE_PARTICLE_BRIGHTNESS", 0.55), // 目标簇亮度基值（0~1）
   particleBrightnessVar: envNum("VITE_PARTICLE_BRIGHTNESS_VAR", 0.45), // 亮度随机闪烁幅度
 
