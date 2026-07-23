@@ -7,10 +7,13 @@
 #
 # 可调参数集中在 .env（见各 PHANTOM_* / VITE_* 变量）。
 # 注意：
-#   - 画布尺寸只改 PHANTOM_CANVAS_W/H —— 后端按它生成路径、前端 VITE_CANVAS_W/H 从
-#     同一变量取值，保证两者一致（否则路径出界）。改后需 `--build` 重 build 前端镜像。
-#   - 雪花密度/亮度类 VITE_PARTICLE_* 属前端 build 时注入，改后同样需重 build 前端镜像。
-#   - 后端 PHANTOM_* 改完重启 backend 容器即可生效。
+#   - 画布尺寸改 PHANTOM_CANVAS_*_PC / *_MOBILE —— 后端按 device 选对应尺寸生成路径，
+#     前端 VITE_CANVAS_*_PC/MOBILE 从同一变量取值（单一来源），保证两者一致
+#     （否则前后端坐标系错位 → S_DTW 崩塌 → 验证恒失败）。
+#     PHANTOM_CANVAS_W/H 仅作 PC 兜底默认（向后兼容）。
+#     ⚠️ 画布尺寸属【前端 build 时注入】，改后必须 `--build` 重 build 前端镜像。
+#   - 雪花密度/亮度类 VITE_PARTICLE_*、VITE_PREVIEW_SECONDS 属前端 build 时注入，改后同样需重 build 前端镜像。
+#   - 后端 PHANTOM_*（非画布类）改完重启 backend 容器即可生效。
 #
 # 生产部署前请务必修改 .env 里的 PHANTOM_TOKEN_SECRET 与 PHANTOM_CORS_ORIGINS。
 

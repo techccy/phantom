@@ -168,6 +168,43 @@ def test_device_defaults_to_pc(client):
     assert params["targetHalf"] == config.TARGET_HALF_PC
 
 
+def test_custom_canvas_size_verifies(client, monkeypatch):
+    """回归：在 .env 改 PHANTOM_CANVAS_*_PC/H_PC 后端到端仍应通过。
+
+    历史缺陷（frontend/Dockerfile）：用户改画布尺寸后，compose 把新值透传给前端镜像的
+    VITE_CANVAS_*_PC，但 Dockerfile 未声明这些 ARG → 被 Docker 静默丢弃 → 前端永远在
+    旧默认尺寸画布上采集，与后端按新尺寸算出的贝塞尔/DTW 归一化坐标系错位 → S_DTW 崩塌
+    → 验证恒失败。本测试在【后端侧】锁定核心不变量：只要前端与后端用同一 canvas 采集与
+    归一化，verify 必须通过（与具体画布像素尺寸无关，因 DTW 已归一化到 [0,1]²）。
+    """
+    CUSTOM_W, CUSTOM_H = 720, 540  # 非默认、非正方形，覆盖宽高不一致场景
+    monkeypatch.setattr(config, "CANVAS_WIDTH_PC", CUSTOM_W)
+    monkeypatch.setattr(config, "CANVAS_HEIGHT_PC", CUSTOM_H)
+
+    payload, session_key = _do_challenge(client)  # device 缺省 → PC → 用 monkeypatch 后的新尺寸
+    params = _decrypt_params(session_key, payload)
+    # 题面下发的画布尺寸必须反映 .env 的新值（后端链路正确）
+    assert params["canvas"]["w"] == CUSTOM_W
+    assert params["canvas"]["h"] == CUSTOM_H
+
+    # 用与后端【完全一致】的控制点 + 画布尺寸合成人类轨迹，模拟"前端在正确尺寸画布上采集"。
+    # 若 DTW 归一化正确，verify 必须通过——这是 .env 改画布后验证恒失败的直接回归点。
+    cp = [(p[0], p[1]) for p in params["controlPoints"]]
+    xs, ys, ts = _human_like_trajectory(cp, params["duration"])
+    body = {"points": [[float(x), float(y), float(t)] for x, y, t in zip(xs, ys, ts)],
+            "lastPointT_ms": int(time.time() * 1000)}
+    enc = crypto.encrypt_payload(session_key, json.dumps(body).encode())
+    r = client.post("/verify", json={
+        "challengeId": payload["challengeId"], "iv": enc["iv"], "ciphertext": enc["ciphertext"],
+    })
+    assert r.status_code == 200
+    res = r.json()
+    assert res["passed"], (
+        f"改画布尺寸({CUSTOM_W}x{CUSTOM_H})后端到端应通过: {res}"
+    )
+    assert res["token"]
+
+
 # ---- helpers ----
 def _human_like_trajectory(control_points, duration, n=300):
     """合成贴合给定贝塞尔路径的人类轨迹。"""
