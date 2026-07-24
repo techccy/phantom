@@ -293,6 +293,13 @@ export function injectStyles(): void {
   color: var(--ph-card-fg);
   box-shadow: var(--ph-shadow-lg);
   animation: phantom-modal-pop-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* 整卡禁选 + 抑制触摸手势：按住按钮向画布拖动时，浏览器不会启动文本选择
+     或长按菜单。子元素（标题/提示/画布/按钮）继承此规则，无需逐个声明。
+     旧 WebKit/Safari 仅认 -webkit- 前缀，故两者都写。touch-action 不影响 click。 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
 }
 @keyframes phantom-modal-pop-in {
   from { opacity: 0; transform: scale(0.96) translateY(4px); }
@@ -369,27 +376,31 @@ export function injectStyles(): void {
 .phantom-modal .phantom-hint {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.625rem;
   width: 100%;
   box-sizing: border-box;
-  padding: 0.5rem 0.875rem;
+  padding: 0.75rem 1rem;
   border: 1px solid var(--ph-border);
   border-radius: var(--ph-radius-md);
   background: var(--ph-muted);
-  font-size: 0.8rem;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  color: var(--ph-muted-fg);
+  /* 字体放大：与画布同宽的提示条，需要更大字号才不会显得空旷 */
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--ph-fg);
   transition: border-color 200ms ease;
 }
 .phantom-modal .phantom-hint::before {
   content: "";
   flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: var(--ph-radius-full);
   background: var(--ph-accent);
-  box-shadow: 0 0 0 3px var(--ph-accent-soft);
+  box-shadow: 0 0 0 4px var(--ph-accent-soft);
   transition: background 200ms ease, box-shadow 200ms ease;
 }
 /* loading / 空文案：不画状态点 */
@@ -422,6 +433,7 @@ export function injectStyles(): void {
   image-rendering: pixelated;
   background: var(--ph-canvas-bg);
   touch-action: none;
+  -webkit-user-select: none;
   display: block;
   /* 响应式：窄屏按宽度等比缩放（tracker 按比例映射，安全） */
   max-width: 100%;
@@ -475,6 +487,8 @@ export function injectStyles(): void {
   letter-spacing: -0.005em;
   cursor: grab;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   touch-action: none;
   transition: transform 0.12s ease, border-color 0.3s ease, box-shadow 0.3s ease,
     background 0.2s ease;

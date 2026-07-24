@@ -206,7 +206,12 @@ class WidgetSession {
   }
 
   private bindInteraction(): void {
-    const onDown = (): void => {
+    // 按下即取消原生默认行为，防止浏览器发起「文本选择 / 图片拖拽」手势——
+    // 这是用户反馈的「按住按钮拖动变成选择文字」的根因之一。
+    // 仅在主键（左键 / 触摸笔 / 手指）时阻止，避免误伤右键菜单等辅助交互。
+    const onDown = (e: PointerEvent): void => {
+      if (e.button !== 0) return;
+      e.preventDefault();
       if (this.collecting || this.previewing || this.finished) return;
       // 预热态：按住瞬间先在起点原地显影方块 2 秒，方便用户熟悉方块位置。
       // 此阶段只做脉冲呼吸显影，不采集、不出发路径、不进入充能态。
@@ -257,10 +262,18 @@ class WidgetSession {
     };
     this.activateBtn.addEventListener("pointerdown", onDown);
     window.addEventListener("pointerup", onUp);
+    // 选择/拖拽兜底拦截：CSS user-select 失效（老 WebKit、宿主页样式污染）时，
+    // 任何 selectstart / dragstart（冒泡到 document）一律阻止，彻底杜绝「拖成选择文字」。
+    // 用 capture 阶段拦截，避免被中间 stopPropagation 吞掉。
+    const onSelectStart = (e: Event): void => e.preventDefault();
+    document.addEventListener("selectstart", onSelectStart, { capture: true });
+    document.addEventListener("dragstart", onSelectStart, { capture: true });
     // 保存以便 destroy 解绑
     this._unbind = () => {
       this.activateBtn.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointerup", onUp);
+      document.removeEventListener("selectstart", onSelectStart, { capture: true } as EventListenerOptions);
+      document.removeEventListener("dragstart", onSelectStart, { capture: true } as EventListenerOptions);
     };
   }
 
