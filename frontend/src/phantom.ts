@@ -193,7 +193,7 @@ class WidgetSession {
       // 进度条充能时长与后端下发的路径时长对齐（充能结束 ≈ 渲染结束）。
       this.activateBtn.style.setProperty("--ph-charge-duration", `${this.duration}s`);
       this.status.textContent = "";
-      this.setHint("ready", "按住下方按钮并马上拖动到方块");
+      this.setHint("ready", "按住下方按钮");
       this.activateBtn.disabled = false;
       this.renderer.drawStaticNoise();
       // 题目就绪：显示玩法遮罩，用户按下即隐藏（见 bindInteraction.onDown）
@@ -217,7 +217,7 @@ class WidgetSession {
       // 此阶段只做脉冲呼吸显影，不采集、不出发路径、不进入充能态。
       this.previewing = true;
       this.overlay.classList.add("phantom-hidden");
-      this.setHint("preview", "移动到闪烁的方块等待启动");
+      this.setHint("preview", "手指/鼠标拖动到闪烁的方块等待");
       this.renderer?.startPreview();
       this.previewTimer = window.setTimeout(beginCollect, PREVIEW_MS);
     };
@@ -229,11 +229,11 @@ class WidgetSession {
       this.previewing = false;
       this.collecting = true;
       this.status.textContent = "";
-      this.setHint("collect", "跟随方块移动");
+      this.setHint("collect", "按住跟随方块移动");
       this.renderer?.stopPreview();
       // onTick：路径走到 t=1（方块停在终点）只触发一次 → 切换"松手"提示。
       this.renderer?.start((_center, t) => {
-        if (t >= 1) this.setHint("stopped", "松手");
+        if (t >= 1) this.setHint("stopped", "请松手");
       });
       this.tracker?.start();
       // 充能进度条此时才开始（动画时长仍对齐 --ph-charge-duration = duration）
