@@ -6,6 +6,11 @@
 Composite = 0.6·S_DTW + 0.4·S_Bio
 S_Bio     = 0.35·energy + 0.30·zc + 0.35·tremor(amp+psd)
 阈值 0.8；残差能量≈0 → 平滑否决（S_Bio=0.05, Composite 封顶 0.20）。
+
+issue #7 后端风控（docs/issue7.md §三）追加两道一票否决：
+  - 周期性伪噪点否决：Math.sin() 注入的 8-12Hz「伪震颤」自相关不衰减、频谱单峰；
+  - 等差时间戳否决：按 fps 公式步进的时间戳 Δt 变异系数≈0。
+两者触发即与平滑否决同级封顶 composite。
 """
 from __future__ import annotations
 
@@ -33,6 +38,12 @@ class ScoreBreakdown:
     tremor_score: float
     smoothness_veto: bool
     passed: bool
+    # issue #7 后端风控否决标志与特征
+    periodic_veto: bool = False
+    arithmetic_ts_veto: bool = False
+    acf_envelope_decay: float = 0.0
+    spectral_flatness_8_12: float = 0.0
+    dt_cv: float = 0.0
     extras: dict = field(default_factory=dict)
 
 
@@ -114,6 +125,8 @@ def score_trajectory(
         tremor_amplitude_px=0.0, psd_8_12_ratio=0.0,
         energy_score=0.0, zc_score=0.0, tremor_score=0.0,
         smoothness_veto=False, passed=False,
+        periodic_veto=False, arithmetic_ts_veto=False,
+        acf_envelope_decay=0.0, spectral_flatness_8_12=0.0, dt_cv=0.0,
     )
 
     if xs.size < config.MIN_POINTS:
@@ -148,8 +161,32 @@ def score_trajectory(
     bezier_pts = dtw.sample_bezier(bezier_control_points, num=256)
     s_dtw = dtw.score_dtw(user_xy, bezier_pts, canvas_w, canvas_h, d_ref_ratio=config.DTW_D_REF_RATIO)
 
+    # 4) issue #7 后端风控否决（docs/issue7.md §三）
+    #    a) 周期性伪噪点：残差自相关不衰减 + 8-12Hz 频谱单峰
+    #    b) 等差时间戳：原始采集 Δt 变异系数≈0
+    rx, ry = ux - fx, uy - fy
+    resid_pick = rx if np.var(rx) >= np.var(ry) else ry
+    acf_decay = dsp.acf_envelope_decay(resid_pick, config.DSP_SAMPLE_HZ)
+    sfm = dsp.spectral_flatness_band(
+        resid_pick, config.DSP_SAMPLE_HZ, config.TREMOR_LO_HZ, config.TREMOR_HI_HZ
+    )
+    dt_cv = dsp.timestamp_dispersity(ts_ms)
+    periodic_veto = (
+        config.PERIODIC_VETO_ENABLED
+        and not smoothness_veto
+        and acf_decay >= config.PERIODIC_ACF_DECAY_MIN
+        and sfm <= config.PERIODIC_SFM_MAX
+    )
+    arithmetic_ts_veto = (
+        config.ARITHMETIC_TS_VETO_ENABLED and dt_cv < config.ARITHMETIC_TS_CV_MIN
+    )
+
     composite = config.W_DTW * s_dtw + config.W_BIO * s_bio
-    if smoothness_veto:
+    if smoothness_veto or arithmetic_ts_veto:
+        # 等差时间戳与过度平滑同级一票否决：封顶 composite，阻断脚本。
+        composite = min(composite, config.SMOOTHNESS_CAP)
+    if periodic_veto:
+        # 周期性伪震颤一票否决：封顶 composite，阻断 Math.sin() 注入。
         composite = min(composite, config.SMOOTHNESS_CAP)
 
     return ScoreBreakdown(
@@ -166,6 +203,11 @@ def score_trajectory(
         tremor_score=round(t_score, 4),
         smoothness_veto=smoothness_veto,
         passed=composite >= config.PASS_THRESHOLD,
+        periodic_veto=periodic_veto,
+        arithmetic_ts_veto=arithmetic_ts_veto,
+        acf_envelope_decay=round(float(acf_decay), 4),
+        spectral_flatness_8_12=round(float(sfm), 4),
+        dt_cv=round(float(dt_cv), 4),
         extras={},
     )
 

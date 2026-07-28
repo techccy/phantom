@@ -77,9 +77,10 @@ BUTTER_CUTOFF_HZ: float = _env_float("PHANTOM_BUTTER_CUTOFF", 7.0)  # 7 Hz 截�
 
 # 评分阈值（手册 §四.1）
 PASS_THRESHOLD: float = _env_float("PHANTOM_PASS_THRESHOLD", 0.8)
+# 一票否决封顶：平滑否决 / 等差时间戳否决 触发时 composite 的统一上限。
+SMOOTHNESS_CAP: float = _env_float("PHANTOM_SMOOTHNESS_CAP", 0.20)
 # 平滑否决线：残差能量(px)低于此值视为过度平滑(jerk≈0)。手册 §三.3 完美机器<0.05px。
 SMOOTHNESS_JERK_EPS: float = _env_float("PHANTOM_SMOOTHNESS_EPS", 0.08)
-SMOOTHNESS_CAP: float = _env_float("PHANTOM_SMOOTHNESS_CAP", 0.20)      # 一票否决封顶
 SMOOTHNESS_BIO: float = _env_float("PHANTOM_SMOOTHNESS_BIO", 0.05)
 
 # S_Bio 权重（手册 §四.1：残差里有没有生理特征）
@@ -94,6 +95,31 @@ W_BIO: float = _env_float("PHANTOM_W_BIO", 0.4)
 # ---- 震颤频段（生理性 8-12Hz）----
 TREMOR_LO_HZ: float = _env_float("PHANTOM_TREMOR_LO_HZ", 8.0)
 TREMOR_HI_HZ: float = _env_float("PHANTOM_TREMOR_HI_HZ", 12.0)
+
+# ---- issue #7 后端风控：周期性伪噪点否决（手册 §三.3 / docs/issue7.md）----
+# 攻击者用 Math.sin() 注入 8-12Hz「伪震颤」——残差自相关不随 lag 衰减、8-12Hz
+# 频段呈单峰。真人肌肉微震是非周期随机过程，自相关指数衰减、频谱宽带。
+# 周期性 = (acf 衰减比高) AND (频谱平坦度低)，双条件同时满足才否决，避免误伤
+# 残差本身偏窄的真实人类。
+PERIODIC_VETO_ENABLED: bool = _env_bool("PHANTOM_PERIODIC_VETO", True)
+# 自相关包络衰减比 = 长 lag 窗 |ACF| 积分 / 短 lag 窗 |ACF| 积分。≥此值视为不衰减（周期）。
+# 实测：真人 0.24~0.44，纯 sin 攻击者 0.68~0.92。
+PERIODIC_ACF_DECAY_MIN: float = _env_float("PHANTOM_PERIODIC_ACF_MIN", 0.6)
+# 8-12Hz 频段谱平坦度（几何/算术均值，0=单峰 1=宽带）。≤此值视为窄带单峰（周期）。
+# 实测：真人 ≥0.89，纯 sin 攻击者 0.02~0.55。
+PERIODIC_SFM_MAX: float = _env_float("PHANTOM_PERIODIC_SFM_MAX", 0.6)
+# 计算自相关的最长 lag（秒）。
+PERIODIC_ACF_MAX_LAG_S: float = _env_float("PHANTOM_PERIODIC_ACF_LAG", 0.4)
+
+# ---- issue #7 后端风控：硬件中断熵否决（手册 §三.3 / docs/issue7.md）----
+# 攻击者按 fps 严格步进生成等差时间戳（performance.now() 公式化）。真人受 CPU
+# 微任务调度 + 硬件中断影响，Δt 无序抖动。校验 Δt 的变异系数（std/mean）切断等差时间戳。
+# 实测：真人 Δt_cv 0.16~0.47，等差 1/fps 攻击者 = 0.0。
+ARITHMETIC_TS_VETO_ENABLED: bool = _env_bool("PHANTOM_ARITH_TS_VETO", True)
+# Δt 变异系数低于此值判为等差时间戳。留出余量，真机最均匀触屏采样也 >0.1。
+ARITHMETIC_TS_CV_MIN: float = _env_float("PHANTOM_ARITH_TS_CV_MIN", 0.05)
+# 否决封顶（与平滑否决同级一票否决语义）。
+ARITHMETIC_TS_CAP: float = _env_float("PHANTOM_ARITH_TS_CAP", 0.20)
 
 # ---- _energy_score 边界（残差能量 px；手册 §三.3）----
 # <ENERGY_MIN≈过度平滑→0；ENERGY_LOW~HIGH 为生理区间→1；>ENERGY_MAX≈粗糙白噪→0
