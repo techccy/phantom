@@ -39,6 +39,7 @@ import { installAntidebug } from "./antidebug";
 import { PhantomRenderer, type BezierParams } from "./renderer";
 import { TrajectoryTracker } from "./tracker";
 import { injectStyles, type Theme } from "./styles";
+import { deriveBezierPath } from "./prng";
 
 export type { VerifyResult } from "./api";
 
@@ -178,13 +179,32 @@ class WidgetSession {
       );
       this.challengeId = challenge.challengeId;
 
-      // 2) 解密路径参数
+      // 2) 解密路径参数（issue #7：只含 pathSeed + 布局，不含控制点）
       const paramsJson = await decrypt(
         this.sessionKey,
         challenge.encryptedParams.iv,
         challenge.encryptedParams.ciphertext,
       );
-      const params = JSON.parse(new TextDecoder().decode(paramsJson)) as BezierParams;
+      const raw = JSON.parse(new TextDecoder().decode(paramsJson)) as {
+        canvas: { w: number; h: number };
+        duration: number;
+        fps: number;
+        targetHalf: number;
+        pathSeed: string;
+      };
+      // 控制点【本地派生】：后端用同一 pathSeed + 同一算法推出相同控制点做评分。
+      // 网络上只有不可解读的种子；hook decrypt 只能看到种子而非 [x,y] 几何点表。
+      const controlPoints = deriveBezierPath(
+        raw.pathSeed,
+        raw.canvas.w,
+        raw.canvas.h,
+      );
+      const params: BezierParams = {
+        controlPoints,
+        duration: raw.duration,
+        fps: raw.fps,
+        targetHalf: raw.targetHalf,
+      };
       this.duration = params.duration;
       this.renderer = new PhantomRenderer(this.canvas, params);
       this.tracker = new TrajectoryTracker(this.canvas);

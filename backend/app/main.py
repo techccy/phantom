@@ -89,23 +89,18 @@ async def verify(req: models.VerifyRequest):
     ys = [p[1] for p in points]
     ts = [p[2] for p in points]
 
-    # [DEBUG] 采集到的数据：完整轨迹、时效、题面参数
+    # [DEBUG] 采集摘要：只打印点数 / 时效 / 画布尺寸，不再打印 control_points
+    # （路径标准答案）与采集轨迹明文——避免服务端日志成为 issue #7 类的旁路泄露面。
     if config.DEBUG:
         logger.debug(
-            "[verify] 采集数据 challenge_id=%s n_points=%d last_point_t_ms=%d drift_s=%.3f "
-            "canvas=%sx%s control_points=%s",
+            "[verify] 采集摘要 challenge_id=%s n_points=%d last_point_t_ms=%d drift_s=%.3f "
+            "canvas=%sx%s",
             req.challengeId,
             len(points),
             last_point_t,
             drift_s,
             record.get("canvas_w"),
             record.get("canvas_h"),
-            record.get("control_points"),
-        )
-        logger.debug(
-            "[verify] 轨迹明细 challenge_id=%s points=%s",
-            req.challengeId,
-            points,
         )
 
     # 4) 评分
