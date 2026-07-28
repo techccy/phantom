@@ -89,23 +89,18 @@ async def verify(req: models.VerifyRequest):
     ys = [p[1] for p in points]
     ts = [p[2] for p in points]
 
-    # [DEBUG] 采集到的数据：完整轨迹、时效、题面参数
+    # [DEBUG] 采集摘要：只打印点数 / 时效 / 画布尺寸，不再打印 control_points
+    # （路径标准答案）与采集轨迹明文——避免服务端日志成为 issue #7 类的旁路泄露面。
     if config.DEBUG:
         logger.debug(
-            "[verify] 采集数据 challenge_id=%s n_points=%d last_point_t_ms=%d drift_s=%.3f "
-            "canvas=%sx%s control_points=%s",
+            "[verify] 采集摘要 challenge_id=%s n_points=%d last_point_t_ms=%d drift_s=%.3f "
+            "canvas=%sx%s",
             req.challengeId,
             len(points),
             last_point_t,
             drift_s,
             record.get("canvas_w"),
             record.get("canvas_h"),
-            record.get("control_points"),
-        )
-        logger.debug(
-            "[verify] 轨迹明细 challenge_id=%s points=%s",
-            req.challengeId,
-            points,
         )
 
     # 4) 评分
@@ -119,12 +114,14 @@ async def verify(req: models.VerifyRequest):
     )
     detail = scoring.engine.breakdown_to_dict(breakdown)
 
-    # [DEBUG] 原分属：综合分 + DTW/Bio 子分 + 各生理特征与子项
+    # [DEBUG] 原分属：综合分 + DTW/Bio 子分 + 各生理特征与子项（含 issue #7 后端风控否决标志）
     if config.DEBUG:
         logger.debug(
             "[verify] 原分属 challenge_id=%s passed=%s composite=%.4f s_dtw=%.4f s_bio=%.4f "
-            "smoothness_veto=%s residual_energy=%.5f jerk_variance=%.5f "
+            "smoothness_veto=%s periodic_veto=%s arithmetic_ts_veto=%s "
+            "residual_energy=%.5f jerk_variance=%.5f "
             "accel_zerocrossings=%d tremor_amplitude_px=%.5f psd_8_12_ratio=%.5f "
+            "acf_envelope_decay=%.4f spectral_flatness_8_12=%.4f dt_cv=%.4f "
             "energy_score=%.4f zc_score=%.4f tremor_score=%.4f extras=%s",
             req.challengeId,
             breakdown.passed,
@@ -132,11 +129,16 @@ async def verify(req: models.VerifyRequest):
             breakdown.s_dtw,
             breakdown.s_bio,
             breakdown.smoothness_veto,
+            breakdown.periodic_veto,
+            breakdown.arithmetic_ts_veto,
             breakdown.residual_energy,
             breakdown.jerk_variance,
             breakdown.accel_zerocrossings,
             breakdown.tremor_amplitude_px,
             breakdown.psd_8_12_ratio,
+            breakdown.acf_envelope_decay,
+            breakdown.spectral_flatness_8_12,
+            breakdown.dt_cv,
             breakdown.energy_score,
             breakdown.zc_score,
             breakdown.tremor_score,

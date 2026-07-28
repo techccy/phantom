@@ -124,6 +124,82 @@ def band_power_ratio(sig: np.ndarray, fs: int, lo: float, hi: float) -> float:
     return float(np.trapezoid(pxx[mask], freqs[mask]) / total)
 
 
+def acf_envelope_decay(
+    sig: np.ndarray, fs: int, max_lag_s: float = config.PERIODIC_ACF_MAX_LAG_S
+) -> float:
+    """残差自相关包络衰减比（手册 §三.3 / docs/issue7.md）。
+
+    定义：长 lag 窗 |ACF(τ)| 积分 / 短 lag 窗 |ACF(τ)| 积分。
+      - 纯周期信号（Math.sin 伪震颤）：ACF 不随 lag 衰减，长/短窗能量相当 → 比≈1；
+      - 非周期随机过程（真人肌肉微震）：ACF 指数衰减，长窗能量远小于短窗 → 比→0。
+
+    返回值越大越「周期」。sig 经均值去势后用未归一自相关计算，最后除以方差归一化。
+    """
+    sig = np.asarray(sig, dtype=np.float64)
+    if sig.size < 16:
+        return 0.0
+    r = sig - sig.mean()
+    var = float(np.dot(r, r))
+    if var <= 0.0:
+        return 0.0
+    max_lag = min(int(max_lag_s * fs), sig.size - 1)
+    if max_lag < 8:
+        return 0.0
+    acf = np.empty(max_lag, dtype=np.float64)
+    for lag in range(1, max_lag + 1):
+        acf[lag - 1] = float(np.dot(r[: sig.size - lag], r[lag:]) / var)
+    envelope = np.abs(acf)
+    mid = envelope.size // 2
+    if mid < 1:
+        return 0.0
+    short_energy = float(envelope[:mid].sum()) + 1e-12
+    long_energy = float(envelope[mid:].sum()) + 1e-12
+    return long_energy / short_energy
+
+
+def spectral_flatness_band(
+    sig: np.ndarray, fs: int, lo: float, hi: float
+) -> float:
+    """指定频段的谱平坦度（几何均值 / 算术均值）。
+
+    8-12Hz 段单峰（Math.sin 伪震颤）→ 接近 0；宽带（真人非周期微震）→ 接近 1。
+    与 acf_envelope_decay 互为印证：两者都判周期时才否决，避免误伤窄带真人残差。
+    """
+    if sig.size < 16:
+        return 0.0
+    nperseg = min(sig.size, 128)
+    freqs, pxx = welch(sig, fs=fs, nperseg=nperseg)
+    mask = (freqs >= lo) & (freqs <= hi)
+    band = pxx[mask]
+    if band.size < 2 or band.sum() <= 0.0:
+        return 0.0
+    band = band + 1e-12
+    geo = float(np.exp(np.mean(np.log(band))))
+    arith = float(np.mean(band))
+    if arith <= 0.0:
+        return 0.0
+    return max(0.0, min(1.0, geo / arith))
+
+
+def timestamp_dispersity(ts_ms: np.ndarray) -> float:
+    """硬件中断熵（手册 §三.3 / docs/issue7.md）：相邻样本 Δt 的变异系数 std/mean。
+
+      - 等差时间戳（按 fps 公式步进的攻击者）：Δt 恒定 → cv ≈ 0；
+      - 真人采样（pointermove 节流 + CPU 调度 + 硬件中断）：Δt 无序抖动 → cv 显著 >0。
+
+    返回 cv，越小越「等差」。ts_ms 必须是原始采集时间戳（未上采样）。
+    """
+    ts_ms = np.asarray(ts_ms, dtype=np.float64)
+    dt = np.diff(ts_ms)
+    dt = dt[dt > 0]
+    if dt.size < 4:
+        return 0.0
+    mean = float(dt.mean())
+    if mean <= 0.0:
+        return 0.0
+    return float(dt.std() / mean)
+
+
 def extract_bio_features(
     xs: np.ndarray, ys: np.ndarray, fs: int = config.DSP_SAMPLE_HZ
 ) -> tuple[BioFeatures, np.ndarray, np.ndarray]:
