@@ -85,64 +85,6 @@ export function paintFullNoise(buf: Buffer): void {
   }
 }
 
-/** issue #10（docs/debug10.md §一.1）：相干漂移噪点背景。
- *
- * 纯白噪点在多帧时域累加下均值为 0 → 攻击者（phantom-solver 的 CV 模式）对 N 帧
- * 求和即可抵消背景、暴露协同移动的目标粒子。本函数在逐像素白噪之上叠加一层
- * 【低分辨率相干漂移场】：该场跨帧仅缓慢平移（driftX/driftY），帧间高度相关 →
- * 时域求和后【不会抵消】，残留为非零的斑驳纹理，把目标粒子淹没其中。
- *
- * 漂移场对全画布（含目标区）均匀作用 → 单帧上目标区与背景【仍同分布】（两者都叠加了
- * 同一层漂移偏置），不破坏「gain=0 时目标≈背景」的反密度分析性质，人眼仍靠共同位移
- * 显影。漂移场由调用方持有并逐帧推进 driftX/driftY（相关更新），见 PhantomRenderer。
- *
- * 参数：
- *  - driftField: 持久低分辨率场，长度 = driftCols*driftRows，元素为 [0,255]。
- *  - tilePx: 每个场单元覆盖多少像素（越大越粗、漂移越明显）。
- *  - driftX/driftY: 当前漂移量（场单元数，可为小数→向下取整）。逐帧推进 → 帧间相关。
- *  - mix: 漂移偏置的混合强度 [0,1]：0=纯白噪（退化为 paintFullNoise），1=完全用场值。
- */
-export function paintFullNoiseDrift(
-  buf: Buffer,
-  driftField: Uint8Array,
-  driftCols: number,
-  driftRows: number,
-  tilePx: number,
-  driftX: number,
-  driftY: number,
-  mix: number,
-): void {
-  const { w, h, data } = buf;
-  if (
-    driftCols < 1 || driftRows < 1 || driftField.length < driftCols * driftRows
-    || tilePx < 1 || mix <= 0
-  ) {
-    // 退化：无漂移场或混合为 0 → 退化为纯白噪
-    paintFullNoise(buf);
-    return;
-  }
-  const dx = Math.floor(driftX);
-  const dy = Math.floor(driftY);
-  for (let y = 0; y < h; y++) {
-    const gy = ((((y / tilePx) | 0) + dy) % driftRows + driftRows) % driftRows;
-    const rowBase = gy * driftCols;
-    const rowOff = y * w;
-    for (let x = 0; x < w; x++) {
-      const gx = ((((x / tilePx) | 0) + dx) % driftCols + driftCols) % driftCols;
-      const bias = driftField[rowBase + gx]; // 场值 [0,255]
-      // 白噪 + 漂移偏置：把白噪向 bias 拉 mix 比例
-      const white = (Math.random() * 256) | 0;
-      let v = white + ((bias - white) * mix) | 0;
-      if (v < 0) v = 0; else if (v > 255) v = 255;
-      const idx = (rowOff + x) << 2;
-      data[idx] = v;
-      data[idx + 1] = v;
-      data[idx + 2] = v;
-      data[idx + 3] = 255;
-    }
-  }
-}
-
 /** 把一簇持久化粒子整体平移到中心 (cx,cy) 后写入缓冲。
  *
  *  - particles: 持久化粒子簇（来自 makeCluster，跨帧复用 → 共同命运）。
