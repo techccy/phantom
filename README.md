@@ -1,6 +1,6 @@
 # Phantom - 新一代人机验证思路
 
-### [ENGLISH VERSION >>>](README_EN.md)
+### [关于这个项目，我有话要说 >>>](https://github.com/techccy/phantom/releases/tag/V2.0.0)
 
 ### ***回首向来萧瑟处，归去，也无风雨也无晴。***
 
