@@ -200,6 +200,58 @@ def timestamp_dispersity(ts_ms: np.ndarray) -> float:
     return float(dt.std() / mean)
 
 
+def axial_tremor_ratio(
+    rx: np.ndarray,
+    ry: np.ndarray,
+    fs: int,
+    lo: float = config.TREMOR_LO_HZ,
+    hi: float = config.TREMOR_HI_HZ,
+) -> tuple[float, float, float]:
+    """轴向非对称震颤比（docs/debug10.md §二）。
+
+    分别在 X/Y 两轴残差上做 8-12Hz 带通，取各自的 RMS 振幅，返回
+    (ratio, amp_x, amp_y)，其中 ratio = max(amp)/min(amp)（≥1.0）。
+
+    解剖学依据：人类生理震颤在主运动方向与垂直方向频谱结构显著不同（主轴强、
+    副轴弱）；攻击者脚本（pastebin Node 脚本 / phantom-solver）在 X/Y 注入
+    【同频率、同幅度】的 sin/cos → 两轴带通振幅近乎相等 → ratio≈1.0。
+    """
+    bx = bandpass(rx, lo, hi, fs)
+    by = bandpass(ry, lo, hi, fs)
+    amp_x = float(np.sqrt(np.mean(bx**2))) if bx.size else 0.0
+    amp_y = float(np.sqrt(np.mean(by**2))) if by.size else 0.0
+    denom = min(amp_x, amp_y)
+    ratio = (max(amp_x, amp_y) / denom) if denom > 1e-9 else float("inf")
+    return float(ratio), amp_x, amp_y
+
+
+def subpixel_tail_entropy(coords: np.ndarray, bins: int = config.SUBPIXEL_BINS) -> float:
+    """子像素尾数分布熵（docs/debug10.md §二）。
+
+    取坐标的小数尾数（coords - floor(coords)），量化到 bins 个等宽桶，计算归一化
+    香农熵（除以 log2(bins)，落在 [0,1]）。
+
+      - 真实硬件采集（鼠标/触屏经 DPR 缩放 + 浮点映射）：尾数均匀分布于 [0,1)
+        → 直方图平坦 → 归一化熵接近 1.0；
+      - 攻击者 Math.round()/整数公式：所有样本落在整数格点 → 尾数恒为 0
+        → 单桶坍缩 → 归一化熵≈0。
+
+    空输入或 bins<2 返回 1.0（视为「无证据退化」，避免误否决样本过少的轨迹）。
+    """
+    coords = np.asarray(coords, dtype=np.float64).ravel()
+    if coords.size < 2 or bins < 2:
+        return 1.0
+    tails = coords - np.floor(coords)
+    hist, _ = np.histogram(tails, bins=bins, range=(0.0, 1.0))
+    total = float(hist.sum())
+    if total <= 0.0:
+        return 1.0
+    p = hist.astype(np.float64) / total
+    p = p[p > 0.0]
+    # 归一化到 [0,1]：除以理论最大熵 log2(bins)
+    return float(-(p * np.log2(p)).sum() / np.log2(bins))
+
+
 def extract_bio_features(
     xs: np.ndarray, ys: np.ndarray, fs: int = config.DSP_SAMPLE_HZ
 ) -> tuple[BioFeatures, np.ndarray, np.ndarray]:

@@ -70,6 +70,9 @@ export class PhantomRenderer {
    *    用同一组粒子保证形状一致。
    *  - 灰度增益（gain）仅作用于动态渲染；预热脉冲用固定呼吸亮度显影。 */
   private readonly particles: Particle[];
+  /** issue #10（§一.2）：到龄粒子的重生概率。每帧到龄粒子按此概率重置偏移/灰度，
+   *  打断 CV 跨帧逐粒子关联。 */
+  private static readonly PARTICLE_REGEN_PROB = 0.85;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -86,8 +89,10 @@ export class PhantomRenderer {
   }
 
   /** 用逐像素随机灰度铺满整个 ImageData。
-   * 静态帧（drawStaticNoise）与动态帧背景共用 → 两条路径密度完全一致，
-   * 消除"按下瞬间背景变暗"的跳变。 */
+   *  静态帧（drawStaticNoise）与动态帧背景共用同一套纯白噪 → 两条路径密度完全一致，
+   *  消除"按下瞬间背景变暗"的跳变。
+   *  issue #10 视觉防御改由粒子生命周期扰动（stampCluster 内）承载，背景保持纯白噪，
+   *  不引入任何空域相关结构（否则会形成马赛克方块）。 */
   private paintFullNoise(data: Uint8ClampedArray): void {
     paintFullNoisePure({ w: this.canvas.width, h: this.canvas.height, data });
   }
@@ -175,13 +180,15 @@ export class PhantomRenderer {
     const img = ctx.createImageData(w, h);
     const data = img.data;
 
-    // 1) 背景：逐像素随机噪点（与 drawStaticNoise 同密度）→ 单帧即纯噪点，
-    //    且与静态帧无明暗跳变
+    // 1) 背景：逐像素随机纯白噪（与静态帧同密度）→ 单帧即纯噪点，无空域结构（无方块），
+    //    且与静态帧无明暗跳变。issue #10 视觉防御改由下方粒子生命周期扰动承载。
     this.paintFullNoise(data);
 
     // 2) 目标方块：持久化粒子簇整体平移到当前贝塞尔中心 → "共同命运"显影。
     //    粒子跨帧复用（仅随机丢弃），中心逐帧沿贝塞尔推进 → 人眼积分成"移动的方块"。
     //    gain=0 时粒子灰度与背景同分布 → 机器逐帧看不出；人眼靠共同位移仍可见。
+    //    issue #10 §一.2：到龄粒子按概率重生（重置 rx/ry/v）→ 打断 CV 跨帧逐粒子关联，
+    //    人眼因 ~100-200ms 时间积分感知不到断裂。
     const center = bezierAt(this.params.controlPoints, t);
     stampClusterPure(
       { w, h, data },
@@ -189,6 +196,9 @@ export class PhantomRenderer {
       center,
       CONFIG.particleTargetGain,
       CONFIG.particleDropRate,
+      1,
+      this.params.targetHalf,
+      PhantomRenderer.PARTICLE_REGEN_PROB,
     );
 
     ctx.putImageData(img, 0, 0);

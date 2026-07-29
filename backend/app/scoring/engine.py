@@ -44,6 +44,19 @@ class ScoreBreakdown:
     acf_envelope_decay: float = 0.0
     spectral_flatness_8_12: float = 0.0
     dt_cv: float = 0.0
+    # issue #10 后端风控否决标志与特征（docs/debug10.md）
+    # - 轴向非对称震颤否决：脚本式 X/Y 同幅度对称加噪（pastebin / phantom-solver）
+    axial_asymmetry_veto: bool = False
+    axial_tremor_ratio: float = 0.0
+    axial_tremor_amp_x: float = 0.0
+    axial_tremor_amp_y: float = 0.0
+    # - 子像素尾数退化否决：Math.round()/整数公式导致的尾数坍缩
+    subpixel_veto: bool = False
+    subpixel_entropy_x: float = 0.0
+    subpixel_entropy_y: float = 0.0
+    # - 最小人类响应时长下限否决：离线高速合成
+    min_duration_veto: bool = False
+    duration_ms: float = 0.0
     extras: dict = field(default_factory=dict)
 
 
@@ -127,6 +140,10 @@ def score_trajectory(
         smoothness_veto=False, passed=False,
         periodic_veto=False, arithmetic_ts_veto=False,
         acf_envelope_decay=0.0, spectral_flatness_8_12=0.0, dt_cv=0.0,
+        axial_asymmetry_veto=False, axial_tremor_ratio=0.0,
+        axial_tremor_amp_x=0.0, axial_tremor_amp_y=0.0,
+        subpixel_veto=False, subpixel_entropy_x=0.0, subpixel_entropy_y=0.0,
+        min_duration_veto=False, duration_ms=0.0,
     )
 
     if xs.size < config.MIN_POINTS:
@@ -181,12 +198,42 @@ def score_trajectory(
         config.ARITHMETIC_TS_VETO_ENABLED and dt_cv < config.ARITHMETIC_TS_CV_MIN
     )
 
+    # 5) issue #10 后端风控否决（docs/debug10.md §二）
+    #    a) 轴向非对称震颤：脚本式 X/Y 同幅度对称加噪（pastebin / phantom-solver）。
+    #       两轴 8-12Hz 带通振幅比≈1.0 → 全向均匀加噪 → 一票否决。仅在两轴都达到
+    #       最小震颤幅度时才校验（避免对接近平滑、已被 smoothness_veto 兜底的轨迹误判）。
+    axial_ratio, axial_amp_x, axial_amp_y = dsp.axial_tremor_ratio(rx, ry, config.DSP_SAMPLE_HZ)
+    axial_asymmetry_veto = (
+        config.AXIAL_ASYMMETRY_VETO_ENABLED
+        and not smoothness_veto
+        and axial_amp_x >= config.AXIAL_TREMOR_AMP_MIN
+        and axial_amp_y >= config.AXIAL_TREMOR_AMP_MIN
+        and axial_ratio <= config.AXIAL_TREMOR_RATIO_MIN
+    )
+    #    b) 子像素尾数退化：Math.round()/整数公式生成的坐标尾数坍缩到极少桶。
+    #       在【原始采集】坐标上算（非上采样网格），样本足够时才校验。
+    sub_entropy_x = dsp.subpixel_tail_entropy(xs, config.SUBPIXEL_BINS)
+    sub_entropy_y = dsp.subpixel_tail_entropy(ys, config.SUBPIXEL_BINS)
+    subpixel_veto = (
+        config.SUBPIXEL_VETO_ENABLED
+        and xs.size >= config.SUBPIXEL_MIN_POINTS
+        and (sub_entropy_x < config.SUBPIXEL_ENTROPY_MIN
+             or sub_entropy_y < config.SUBPIXEL_ENTROPY_MIN)
+    )
+    #    c) 最小人类响应时长下限：整体耗时 < MIN_HUMAN_DURATION_MS → 离线高速合成。
+    duration_ms = float(ts_ms[-1] - ts_ms[0]) if ts_ms.size >= 2 else 0.0
+    min_duration_veto = duration_ms < config.MIN_HUMAN_DURATION_MS
+
     composite = config.W_DTW * s_dtw + config.W_BIO * s_bio
-    if smoothness_veto or arithmetic_ts_veto:
-        # 等差时间戳与过度平滑同级一票否决：封顶 composite，阻断脚本。
-        composite = min(composite, config.SMOOTHNESS_CAP)
-    if periodic_veto:
-        # 周期性伪震颤一票否决：封顶 composite，阻断 Math.sin() 注入。
+    # 任意一道一票否决触发 → composite 封顶到 SMOOTHNESS_CAP，阻断脚本。
+    if (
+        smoothness_veto
+        or arithmetic_ts_veto
+        or periodic_veto
+        or axial_asymmetry_veto
+        or subpixel_veto
+        or min_duration_veto
+    ):
         composite = min(composite, config.SMOOTHNESS_CAP)
 
     return ScoreBreakdown(
@@ -208,6 +255,15 @@ def score_trajectory(
         acf_envelope_decay=round(float(acf_decay), 4),
         spectral_flatness_8_12=round(float(sfm), 4),
         dt_cv=round(float(dt_cv), 4),
+        axial_asymmetry_veto=axial_asymmetry_veto,
+        axial_tremor_ratio=round(float(axial_ratio), 4),
+        axial_tremor_amp_x=round(float(axial_amp_x), 4),
+        axial_tremor_amp_y=round(float(axial_amp_y), 4),
+        subpixel_veto=subpixel_veto,
+        subpixel_entropy_x=round(float(sub_entropy_x), 4),
+        subpixel_entropy_y=round(float(sub_entropy_y), 4),
+        min_duration_veto=min_duration_veto,
+        duration_ms=round(duration_ms, 3),
         extras={},
     )
 

@@ -1,6 +1,14 @@
-# Phantom - A new type of Captcha !
+# Phantom - Next-Generation Bot Verification Concept
 
-### [中文版本 >>>](README.md)
+### [CHINESE VERSION >>>](README.md)
+
+### ***To make an end is to make a beginning. The end is where we start from.***
+
+### ***This project was built for practice and is no longer maintained. Thank you all for your support.***
+
+* Built with vibe coding; it may contain flaws and bugs. Thank you for your understanding!
+
+---
 
 > BUILT BY A 15-YEAR-OLD TEEN IN CHINA !
 
