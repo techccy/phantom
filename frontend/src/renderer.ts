@@ -22,6 +22,7 @@ import { CONFIG } from "./config";
 import {
   makeCluster,
   paintFullNoise as paintFullNoisePure,
+  paintFullNoiseDrift,
   stampCluster as stampClusterPure,
   type Particle,
 } from "./particles";
@@ -70,6 +71,25 @@ export class PhantomRenderer {
    *    用同一组粒子保证形状一致。
    *  - 灰度增益（gain）仅作用于动态渲染；预热脉冲用固定呼吸亮度显影。 */
   private readonly particles: Particle[];
+  /** issue #10（§一.1）：相干漂移噪点场。
+   *  低分辨率持久场 + 逐帧缓慢漂移 → 跨帧高度相关 → 多帧时域求和【不会抵消】，
+   *  残留为非零斑驳纹理，把协同移动的目标粒子淹没，击穿 phantom-solver CV 模式
+   *  的「多帧均值提取」。构造时按画布尺寸生成一次，渲染时逐帧推进漂移量。 */
+  private driftField: Uint8Array = new Uint8Array(0);
+  private driftCols = 0;
+  private driftRows = 0;
+  private driftX = 0;
+  private driftY = 0;
+  /** 漂移场每个单元覆盖的像素边长（越大越粗、漂移越显著，但需平衡单帧可见性）。 */
+  private static readonly DRIFT_TILE_PX = 12;
+  /** 漂移偏置的混合强度 [0,1]。0=纯白噪（退化为旧背景），1=完全用场值。
+   *  取中偏小：既保证目标区与背景仍同分布（不破坏反密度分析），又让时域求和残留明显。 */
+  private static readonly DRIFT_MIX = 0.35;
+  /** 每帧场漂移量（单元/帧）。缓慢推进 → 帧间高度相关。 */
+  private static readonly DRIFT_SPEED = 0.6;
+  /** issue #10（§一.2）：到龄粒子的重生概率。每帧到龄粒子按此概率重置偏移/灰度，
+   *  打断 CV 跨帧逐粒子关联。 */
+  private static readonly PARTICLE_REGEN_PROB = 0.85;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -83,13 +103,42 @@ export class PhantomRenderer {
     this.targetParticleCount = Math.max(64, Math.floor(boxArea * CONFIG.particleDensity));
     // 粒子灰度在 makeCluster 内取均匀 [0,255]（与背景同分布）→ gain=0 时与背景无差异
     this.particles = makeCluster(this.targetParticleCount, params.targetHalf);
+    // 初始化相干漂移场：覆盖整个画布的低分辨率场。
+    this.driftCols = Math.max(1, Math.ceil(canvas.width / PhantomRenderer.DRIFT_TILE_PX));
+    this.driftRows = Math.max(1, Math.ceil(canvas.height / PhantomRenderer.DRIFT_TILE_PX));
+    this.driftField = new Uint8Array(this.driftCols * this.driftRows);
+    this._regenDriftField();
+    this.driftX = Math.random() * this.driftCols;
+    this.driftY = Math.random() * this.driftRows;
+  }
+
+  /** 重新随机化漂移场（构造时与题目刷新时调用）。 */
+  private _regenDriftField(): void {
+    for (let i = 0; i < this.driftField.length; i++) {
+      this.driftField[i] = (Math.random() * 256) | 0;
+    }
   }
 
   /** 用逐像素随机灰度铺满整个 ImageData。
    * 静态帧（drawStaticNoise）与动态帧背景共用 → 两条路径密度完全一致，
-   * 消除"按下瞬间背景变暗"的跳变。 */
-  private paintFullNoise(data: Uint8ClampedArray): void {
-    paintFullNoisePure({ w: this.canvas.width, h: this.canvas.height, data });
+   * 消除"按下瞬间背景变暗"的跳变。
+   * issue #10：动态帧（drift=true）叠加相干漂移场击穿多帧均值；静态帧（drift=false）
+   * 仍用纯白噪，与预热脉冲/初始态保持一致分布。 */
+  private paintFullNoise(data: Uint8ClampedArray, drift = false): void {
+    if (drift) {
+      paintFullNoiseDrift(
+        { w: this.canvas.width, h: this.canvas.height, data },
+        this.driftField,
+        this.driftCols,
+        this.driftRows,
+        PhantomRenderer.DRIFT_TILE_PX,
+        this.driftX,
+        this.driftY,
+        PhantomRenderer.DRIFT_MIX,
+      );
+    } else {
+      paintFullNoisePure({ w: this.canvas.width, h: this.canvas.height, data });
+    }
   }
 
   /** 启动动态渲染循环。返回目标当前位置（用于 UI 指引，可选）。 */
@@ -175,13 +224,19 @@ export class PhantomRenderer {
     const img = ctx.createImageData(w, h);
     const data = img.data;
 
-    // 1) 背景：逐像素随机噪点（与 drawStaticNoise 同密度）→ 单帧即纯噪点，
-    //    且与静态帧无明暗跳变
-    this.paintFullNoise(data);
+    // 1) 背景：逐像素随机噪点 + 相干漂移场（issue #10 §一.1）。
+    //    漂移场逐帧缓慢平移 → 跨帧高度相关 → 多帧时域求和【不抵消】，残留为非零
+    //    斑驳纹理，淹没协同移动的目标粒子，击穿 phantom-solver CV 的「多帧均值提取」。
+    this.paintFullNoise(data, true);
+    // 推进漂移量（与场尺寸取模，环形平移）
+    this.driftX = (this.driftX + PhantomRenderer.DRIFT_SPEED) % this.driftCols;
+    this.driftY = (this.driftY + PhantomRenderer.DRIFT_SPEED * 0.7) % this.driftRows;
 
     // 2) 目标方块：持久化粒子簇整体平移到当前贝塞尔中心 → "共同命运"显影。
     //    粒子跨帧复用（仅随机丢弃），中心逐帧沿贝塞尔推进 → 人眼积分成"移动的方块"。
     //    gain=0 时粒子灰度与背景同分布 → 机器逐帧看不出；人眼靠共同位移仍可见。
+    //    issue #10 §一.2：到龄粒子按概率重生（重置 rx/ry/v）→ 打断 CV 跨帧逐粒子关联，
+    //    人眼因 ~100-200ms 时间积分感知不到断裂。
     const center = bezierAt(this.params.controlPoints, t);
     stampClusterPure(
       { w, h, data },
@@ -189,6 +244,9 @@ export class PhantomRenderer {
       center,
       CONFIG.particleTargetGain,
       CONFIG.particleDropRate,
+      1,
+      this.params.targetHalf,
+      PhantomRenderer.PARTICLE_REGEN_PROB,
     );
 
     ctx.putImageData(img, 0, 0);

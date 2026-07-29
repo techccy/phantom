@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from fastapi.testclient import TestClient
 
-from app import challenge, config, crypto, main, models
+from app import challenge, config, crypto, main, models, prng
 from tests.test_scoring import _human_trajectory, CP, W, H  # 复用合成轨迹
 
 
@@ -62,13 +62,27 @@ def _decrypt_params(session_key, payload):
     return json.loads(pt)
 
 
+def _params_control_points(params):
+    """从解密参数里派生控制点——模拟前端 SDK 行为（issue #7）。
+
+    v0.2.0 起密文只下发 pathSeed，控制点由前后端各自确定性派生。
+    测试镜像前端：用 pathSeed + canvas 在本地 derive 出同一组 cp，
+    合成贴合该 cp 的人类轨迹。这样测试与前端是【同一套数据来源】，
+    杜绝"测试从后端偷看 controlPoints"绕过 issue #7 的语义。
+    """
+    seed = bytes.fromhex(params["pathSeed"])
+    return prng.derive_bezier_path(seed, params["canvas"]["w"], params["canvas"]["h"])
+
+
 def test_full_flow_human_passes(client):
     payload, session_key = _do_challenge(client)
     params = _decrypt_params(session_key, payload)
-    assert "controlPoints" in params
+    # issue #7：密文只下发 pathSeed，不再有 controlPoints。前端 SDK 行为=本地派生。
+    assert "controlPoints" not in params
+    assert "pathSeed" in params
 
     # 合成人类轨迹（基于题目真实控制点，确保 DTW 高分）
-    cp = [(p[0], p[1]) for p in params["controlPoints"]]
+    cp = [(p[0], p[1]) for p in _params_control_points(params)]
     xs, ys, ts = _human_like_trajectory(cp, params["duration"])
 
     body = {"points": [[float(x), float(y), float(t)] for x, y, t in zip(xs, ys, ts)],
@@ -96,7 +110,7 @@ def test_one_challenge_one_use(client, monkeypatch):
     """一题一答：第二次 verify 应被 GETDEL 拒绝（410）。"""
     payload, session_key = _do_challenge(client)
     params = _decrypt_params(session_key, payload)
-    cp = [(p[0], p[1]) for p in params["controlPoints"]]
+    cp = [(p[0], p[1]) for p in _params_control_points(params)]
     xs, ys, ts = _human_like_trajectory(cp, params["duration"])
 
     def submit():
@@ -117,7 +131,7 @@ def test_timeout_drift_rejected(client, monkeypatch):
     """时效校验：last_point_t 距 server now 超过 MAX_DRIFT_SECONDS → 拦截。"""
     payload, session_key = _do_challenge(client)
     params = _decrypt_params(session_key, payload)
-    cp = [(p[0], p[1]) for p in params["controlPoints"]]
+    cp = [(p[0], p[1]) for p in _params_control_points(params)]
     xs, ys, ts = _human_like_trajectory(cp, params["duration"])
 
     # 伪造 10 秒前的 last_point_t
@@ -189,7 +203,7 @@ def test_custom_canvas_size_verifies(client, monkeypatch):
 
     # 用与后端【完全一致】的控制点 + 画布尺寸合成人类轨迹，模拟"前端在正确尺寸画布上采集"。
     # 若 DTW 归一化正确，verify 必须通过——这是 .env 改画布后验证恒失败的直接回归点。
-    cp = [(p[0], p[1]) for p in params["controlPoints"]]
+    cp = [(p[0], p[1]) for p in _params_control_points(params)]
     xs, ys, ts = _human_like_trajectory(cp, params["duration"])
     body = {"points": [[float(x), float(y), float(t)] for x, y, t in zip(xs, ys, ts)],
             "lastPointT_ms": int(time.time() * 1000)}

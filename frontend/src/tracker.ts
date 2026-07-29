@@ -47,6 +47,11 @@ export class TrajectoryTracker {
    * 在 [0,1] 内的贝塞尔参考路径每点都拉开 DTW 代价 → S_DTW 崩塌
    * （log5：s_dtw=0.6158 → composite=0.734 < 0.8 → 即便 s_bio=0.91 仍判失败）。
    * 选 clamp 而非丢点：保留时间戳与点数，不影响后端 DSP/零交叉/震颤分析。
+   *
+   * issue #10（docs/debug10.md §二）：映射后【不再 Math.round 取整】。
+   * 真实硬件（鼠标/触屏经 DPR 缩放 + 浮点映射）采集的坐标子像素尾数均匀分布于
+   * [0,1)；后端用尾数分布熵击穿 Math.round() 取整的整数坐标攻击者。若这里取整，
+   * 真人尾数也会坍缩成 0 → 被子像素否决误伤。保留浮点是尾数否决正确生效的前提。
    */
   private mapToCanvas(clientX: number, clientY: number): [number, number] {
     if (!this.rect) return [clientX, clientY];
@@ -54,8 +59,9 @@ export class TrajectoryTracker {
     const scaleY = this.canvas.height / this.rect.height;
     const x = (clientX - this.rect.left) * scaleX;
     const y = (clientY - this.rect.top) * scaleY;
-    const cx = Math.max(0, Math.min(this.canvas.width - 1, Math.round(x)));
-    const cy = Math.max(0, Math.min(this.canvas.height - 1, Math.round(y)));
+    // clamp 到画布边界，保留浮点子像素精度（不再 Math.round）。
+    const cx = Math.max(0, Math.min(this.canvas.width - 1, x));
+    const cy = Math.max(0, Math.min(this.canvas.height - 1, y));
     return [cx, cy];
   }
 

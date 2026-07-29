@@ -121,6 +121,43 @@ ARITHMETIC_TS_CV_MIN: float = _env_float("PHANTOM_ARITH_TS_CV_MIN", 0.05)
 # 否决封顶（与平滑否决同级一票否决语义）。
 ARITHMETIC_TS_CAP: float = _env_float("PHANTOM_ARITH_TS_CAP", 0.20)
 
+# ---- issue #10 后端风控：轴向非对称震颤否决（docs/debug10.md §二）----
+# 攻击者（pastebin Node 脚本 / phantom-solver）在 X/Y 两轴注入【同频率、同幅度】
+# 的 8-12Hz sin/cos 伪震颤——把整个残差当成各向同性（isotropic）的二维向量场。
+# 解剖学限制（docs/debug10.md §二表格）：人类手部生理震颤在主运动方向（AP 轴）与
+# 垂直方向（ML/VT 轴）频谱结构显著不同——脚本式对称加噪做不到。对全向均匀加噪
+# 的轨迹一票否决。
+AXIAL_ASYMMETRY_VETO_ENABLED: bool = _env_bool("PHANTOM_AXIAL_VETO", True)
+# 残差带通(8-12Hz)能量在 X/Y 两轴的比值（大/小）。真人主运动方向与垂直方向的
+# 生理震颤频谱/幅度显著不同 → 比值偏高；攻击者 X/Y 同幅度对称加噪 → 比值→1.0。
+# ≤此阈值判为轴向对称（机器）。
+# 实测：合成真人轨迹 1.21~1.26（解剖学上垂直轴震颤更强），硬化各向同性攻击者 1.05~1.11。
+AXIAL_TREMOR_RATIO_MIN: float = _env_float("PHANTOM_AXIAL_RATIO_MIN", 1.15)
+# 两轴 8-12Hz 带通 RMS 都需有足够幅度（px），否则两轴都接近 0（如过度平滑轨迹，
+# 已被 smoothness_veto 兜底）比值无意义，不触发本否决。
+AXIAL_TREMOR_AMP_MIN: float = _env_float("PHANTOM_AXIAL_AMP_MIN", 0.15)
+
+# ---- issue #10 后端风控：子像素尾数退化否决（docs/debug10.md §二）----
+# 攻击者用 Math.round()/整数公式生成坐标 → 所有样本落在整数像素格点上，子像素
+# 小数尾数分布坍缩（仅 0 出现）。真实硬件（鼠标/触屏经 DPR 缩放 + 浮点映射）采集
+# 的坐标尾数均匀分布于 [0,1)。对尾数分布熵异常（信息熵过低，尾数坍缩到极少桶）的
+# 轨迹一票否决。
+SUBPIXEL_VETO_ENABLED: bool = _env_bool("PHANTOM_SUBPIXEL_VETO", True)
+# 子像素尾数直方图信息熵（以 log2(量化桶数) 为上限归一化到 [0,1]）。
+# 真人尾数均匀分布 → 熵接近 1.0；Math.round 全整数 → 熵≈0。≤此阈值判为尾数退化。
+# 实测真人 ≥0.85，纯整数攻击者 = 0.0。
+SUBPIXEL_ENTROPY_MIN: float = _env_float("PHANTOM_SUBPIXEL_ENTROPY_MIN", 0.6)
+# 尾数量化桶数（每像素切成多少段统计尾数分布）。越大越精细，但样本少时需要足够点。
+SUBPIXEL_BINS: int = _env_int("PHANTOM_SUBPIXEL_BINS", 16)
+# 触发尾数否决所需的最小样本数——不足时尾数分布统计无意义，跳过否决。
+SUBPIXEL_MIN_POINTS: int = _env_int("PHANTOM_SUBPIXEL_MIN_POINTS", 40)
+
+# ---- issue #10 后端风控：最小人类响应时长下限（docs/debug10.md §三）----
+# 人类从眼球识别轮廓→大脑发出运动指令→完成拖拽，最小物理响应时间约 300~500ms。
+# 攻击者离线合成轨迹可在远低于此的时长内生成完整路径。整体耗时（首尾时间戳之差）
+# 低于此下限直接判为自动化脚本。
+MIN_HUMAN_DURATION_MS: float = _env_float("PHANTOM_MIN_HUMAN_DURATION_MS", 250.0)
+
 # ---- _energy_score 边界（残差能量 px；手册 §三.3）----
 # <ENERGY_MIN≈过度平滑→0；ENERGY_LOW~HIGH 为生理区间→1；>ENERGY_MAX≈粗糙白噪→0
 # 注：移动端浏览器 pointermove 被合并降采样，真人触屏残差天然偏小（实测 ~0.15px），

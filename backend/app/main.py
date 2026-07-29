@@ -114,14 +114,17 @@ async def verify(req: models.VerifyRequest):
     )
     detail = scoring.engine.breakdown_to_dict(breakdown)
 
-    # [DEBUG] 原分属：综合分 + DTW/Bio 子分 + 各生理特征与子项（含 issue #7 后端风控否决标志）
+    # [DEBUG] 原分属：综合分 + DTW/Bio 子分 + 各生理特征与子项（含 issue #7 / #10 后端风控否决标志）
     if config.DEBUG:
         logger.debug(
             "[verify] 原分属 challenge_id=%s passed=%s composite=%.4f s_dtw=%.4f s_bio=%.4f "
             "smoothness_veto=%s periodic_veto=%s arithmetic_ts_veto=%s "
+            "axial_asymmetry_veto=%s subpixel_veto=%s min_duration_veto=%s "
             "residual_energy=%.5f jerk_variance=%.5f "
             "accel_zerocrossings=%d tremor_amplitude_px=%.5f psd_8_12_ratio=%.5f "
             "acf_envelope_decay=%.4f spectral_flatness_8_12=%.4f dt_cv=%.4f "
+            "axial_tremor_ratio=%.4f subpixel_entropy_x=%.4f subpixel_entropy_y=%.4f "
+            "duration_ms=%.1f "
             "energy_score=%.4f zc_score=%.4f tremor_score=%.4f extras=%s",
             req.challengeId,
             breakdown.passed,
@@ -131,6 +134,9 @@ async def verify(req: models.VerifyRequest):
             breakdown.smoothness_veto,
             breakdown.periodic_veto,
             breakdown.arithmetic_ts_veto,
+            breakdown.axial_asymmetry_veto,
+            breakdown.subpixel_veto,
+            breakdown.min_duration_veto,
             breakdown.residual_energy,
             breakdown.jerk_variance,
             breakdown.accel_zerocrossings,
@@ -139,6 +145,10 @@ async def verify(req: models.VerifyRequest):
             breakdown.acf_envelope_decay,
             breakdown.spectral_flatness_8_12,
             breakdown.dt_cv,
+            breakdown.axial_tremor_ratio,
+            breakdown.subpixel_entropy_x,
+            breakdown.subpixel_entropy_y,
+            breakdown.duration_ms,
             breakdown.energy_score,
             breakdown.zc_score,
             breakdown.tremor_score,
