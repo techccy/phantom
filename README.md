@@ -4,9 +4,9 @@
 
 ### ***回首向来萧瑟处，归去，也无风雨也无晴。***
 
-### ***本项目作为练手项目，已停止维护，感谢大家的支持***
-
 * Vibe出来的项目，存在纰漏，还请大家多多包容
+
+* 各路大神的版本：[phantom-next](https://github.com/Carlown/phantom-next) @Carlown 、[phantom-walker（破解工具）](https://github.com/laoshuikaixue/phantom-walker)
 
 ---
 
