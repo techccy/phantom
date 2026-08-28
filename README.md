@@ -2,7 +2,9 @@
 
 ### 谢谢各位大神支持我的思路和项目，感谢各位联系我的大神，我重新开放了仓库，希望各位可以一起完善项目！！谢谢！！也欢迎大家联系我ccy@techccy.com，也欢迎各位大神在readme里留下自己的身影！！
 
-### ***积力之所举，则无不胜也；众智之所为，则无不成也***
+> 社区贡献 · 思路索引: 来自 [@Carlown](https://github.com/Carlown) 的 [`phantom-next`](https://github.com/Carlown/phantom-next) 项目提出了"**路径分片时间锁**"方案 — 用分段三次 Hermite 样条 + 节点/切线独立 HMAC 派生 + 真实时钟时间锁,消除整条路径一次性下发导致的旁路泄露。详见下方"**路径分片时间锁 · 思路索引**"章节,完整可运行实现见独立仓库 [Carlown/phantom-next](https://github.com/Carlown/phantom-next)。本仓库现有协议、评分、测试、前端均**不改动** — 完整代码请前往独立仓库,后续是否集成由本仓库维护者评估。
+
+### ***回首向来萧瑟处，归去，也无风雨也无晴。***
 
 * 各路大神的版本：[phantom-next](https://github.com/Carlown/phantom-next) @Carlown 、[phantom-walker（破解工具）](https://github.com/laoshuikaixue/phantom-walker)
 
@@ -261,6 +263,73 @@ phantom/
 ├── .env.example             # Compose 部署环境变量
 └── docs/integration.md      # ★ 面向接入程序员的完整文档
 ```
+
+---
+
+## 路径分片时间锁 · 思路索引(来自 @Carlown / phantom-next)
+
+> 本节是**纯文档索引**,**不改本仓库任何代码、测试、配置或前端 SDK**。完整可运行实现见独立仓库 [Carlown/phantom-next](https://github.com/Carlown/phantom-next)。
+
+### 1. 背景:本仓库现有协议
+
+1. **零前端信任** — 每次 ECDH P-256 临时会话密钥 + AES-256-GCM
+2. **不下发控制点明文** — `/challenge` 密文里只下发 `pathSeed`,前后端各自用 PCG32 派生贝塞尔控制点
+3. **一题一答 / 一票一用** — `GETDEL` 原子弹出
+4. **严防时间差** — `MAX_DRIFT_SECONDS` 时效
+5. **行为判定后端风控** — 周期性 / 等差时间戳 / 轴向非对称 / 子像素尾数 / 最小人类响应时长多重否决
+
+### 2. 残留旁路
+
+第 2 步把"贝塞尔控制点明文"压成"16 字节种子 + 派生",但**整条曲线的熵仍在那 16 字节里** — hook `decrypt` 一次即可拿到 pathSeed,反混淆 SDK 复算得整条贝塞尔,离线合成贴合真实路径的拟人轨迹提交即过(实测端到端通过率 ~100%)。
+
+### 3. 修补思路
+
+让"未来路径的熵在解锁前不存在于已下发数据里":
+
+- 路径改用**分段三次 Hermite 样条**,每段节点 `K_i` 和切线 `m_i` 由 `HMAC(path_seed, "phantom.path.knot.v1"‖i)` 独立派生
+- 切线**不**由邻居节点推出(不用 Catmull-Rom — 那会被反推)
+- C1 连续性仍成立:相邻段共享 K 与 m,方块运动无折角
+
+效果:拿到第 0 片的 12 个精确采样点 → 至多解出第 0 段;第 1 段 K_2、m_2 是**尚未下发的 HMAC 输出** → 算不出。唯一绕过路径:暴力搜 2^256 HMAC 输入。
+
+### 4. 下发协议
+
+**`/challenge` 响应(只下发第 0 片)**:
+- 密文里含 `frame0.points`(12 个采样点)+ `frames.{sliceMs, pointsPerSlice, total, leadMs}` 元数据
+- **不含** `pathSeed` / 节点 / 切线
+
+**`GET /frames/{challengeId}/{k}` 路由(真实时钟时间锁)**:
+- `now - created_at >= k*sliceMs - leadMs` 才放行,否则 425 + `retryAfterMs`
+- challenge 已 GETDEL → 410
+
+### 5. 与现有协议的兼容性(零冲突)
+
+| 现有行为 | 在分片协议下 |
+|---|---|
+| ECDH 会话密钥 | 不变 |
+| 一题一答 GETDEL | 不变(/frames 用 GET 不销毁) |
+| `MAX_DRIFT_SECONDS` 时效 | 不变 |
+| `engine.score_trajectory` 评分 | 不变(参考路径从 control_points 改为 reference_path 重建,几何等价) |
+| `app/scoring/` 所有 veto 规则 | 不变(行为判定与路径派生解耦) |
+
+**该修补是"加法",不删任何代码、任何测试、任何配置、任何前端 SDK。**
+
+### 6. 为什么没直接合到本仓库
+
+本仓库现有协议已被**完整单测锁住**:
+- `backend/app/prng.py` + 5 个 KAT 测试
+- `backend/tests/test_api.py` 4 个端到端集成测试
+- 前端 `frontend/src/prng.ts` + KAT 镜像
+
+直接合入会改写 challenge.py / test_challenge.py / 前端 prng.ts,**破坏**这些测试。即使保留 `path_mode=sliced` 双协议并存分支,也会**改动主代码**而非纯加法 — 与本仓库"零改动"承诺冲突。
+
+### 7. 协作邀请
+
+如果本仓库维护者(或社区成员)对该方向有兴趣,欢迎:
+
+1. 在本仓库开 issue 讨论
+2. 自行 fork [Carlown/phantom-next](https://github.com/Carlown/phantom-next) 适配
+3. 共同设计"双协议并存"的最小 PR(保留现有 prng.py + 现有所有测试,新增 path.py + sliced 分支 + 新增 sliced 模式测试)
 
 ---
 
