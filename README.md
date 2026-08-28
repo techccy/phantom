@@ -2,7 +2,7 @@
 
 ### 谢谢各位大神支持我的思路和项目，感谢各位联系我的大神，我重新开放了仓库，希望各位可以一起完善项目！！谢谢！！也欢迎大家联系我ccy@techccy.com，也欢迎各位大神在readme里留下自己的身影！！
 
-### ***回首向来萧瑟处，归去，也无风雨也无晴。***
+### ***积力之所举，则无不胜也；众智之所为，则无不成也***
 
 * 各路大神的版本：[phantom-next](https://github.com/Carlown/phantom-next) @Carlown 、[phantom-walker（破解工具）](https://github.com/laoshuikaixue/phantom-walker)
 
