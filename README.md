@@ -4,6 +4,8 @@
 
 ### ***积力之所举，则无不胜也；众智之所为，则无不成也***
 
+> 本项目包含大量vibe，希望大家多多包容，共同维护
+
 * 各路大神的版本：[wovhc](https://wovhc.cn/projects/phantom)、[phantom-next](https://github.com/Carlown/phantom-next) 、[phantom-walker（破解工具）](https://github.com/laoshuikaixue/phantom-walker)
 
 ---
