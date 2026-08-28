@@ -1,16 +1,12 @@
 # Phantom - 新一代人机验证思路
 
-### [关于这个项目，我有话要说 >>>](https://github.com/techccy/phantom/releases/tag/V2.0.0)
+### 谢谢各位大神支持我的思路和项目，感谢各位联系我的大神，我重新开放了仓库，希望各位可以一起完善项目！！谢谢！！也欢迎大家联系我ccy@techccy.com，也欢迎各位大神在readme里留下自己的身影！！
 
 ### ***回首向来萧瑟处，归去，也无风雨也无晴。***
-
-* Vibe出来的项目，存在纰漏，还请大家多多包容
 
 * 各路大神的版本：[phantom-next](https://github.com/Carlown/phantom-next) @Carlown 、[phantom-walker（破解工具）](https://github.com/laoshuikaixue/phantom-walker)
 
 ---
-
-> 本项目由广州初三生独立制作！
 
 > 传统图形验证码易被 AI 识破，滑块曲线易被脚本模拟。Phantom 不拼"图形死记硬背"，只拼"你是不是真正拥有肉体和视网膜的人类"。
 
