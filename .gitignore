@@ -1,6 +1,7 @@
 # 非代码产物不入库
 docs/
 .DS_Store
+.workbuddy
 
 # 网友修改材料（本地暂存，不入库）
 wovhc/
