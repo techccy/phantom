@@ -57,6 +57,11 @@ class ScoreBreakdown:
     # - 最小人类响应时长下限否决：离线高速合成
     min_duration_veto: bool = False
     duration_ms: float = 0.0
+    # 轨迹完整性否决
+    endpoint_veto: bool = False
+    endpoint_dist_px: float = 0.0
+    duration_short_veto: bool = False
+    expected_duration_ms: float = 0.0
     extras: dict = field(default_factory=dict)
 
 
@@ -126,8 +131,13 @@ def score_trajectory(
     bezier_control_points: list[tuple[float, float]],
     canvas_w: float,
     canvas_h: float,
+    target_half: float | None = None,
+    expected_duration_ms: float | None = None,
 ) -> ScoreBreakdown:
-    """完整评分入口。返回带明细的 ScoreBreakdown。"""
+    """完整评分入口。返回带明细的 ScoreBreakdown。
+
+    完整性否决参数为 None 时跳过。
+    """
     xs = np.asarray(xs, dtype=np.float64)
     ys = np.asarray(ys, dtype=np.float64)
     ts_ms = np.asarray(ts_ms, dtype=np.float64)
@@ -144,6 +154,8 @@ def score_trajectory(
         axial_tremor_amp_x=0.0, axial_tremor_amp_y=0.0,
         subpixel_veto=False, subpixel_entropy_x=0.0, subpixel_entropy_y=0.0,
         min_duration_veto=False, duration_ms=0.0,
+        endpoint_veto=False, endpoint_dist_px=0.0,
+        duration_short_veto=False, expected_duration_ms=0.0,
     )
 
     if xs.size < config.MIN_POINTS:
@@ -224,6 +236,19 @@ def score_trajectory(
     duration_ms = float(ts_ms[-1] - ts_ms[0]) if ts_ms.size >= 2 else 0.0
     min_duration_veto = duration_ms < config.MIN_HUMAN_DURATION_MS
 
+    # 6) 轨迹完整性否决
+    #    a) 终点命中
+    endpoint_dist = 0.0
+    endpoint_veto = False
+    if config.ENDPOINT_VETO_ENABLED and target_half:
+        end_x, end_y = bezier_pts[-1]
+        endpoint_dist = float(math.hypot(xs[-1] - end_x, ys[-1] - end_y))
+        endpoint_veto = endpoint_dist > target_half * config.ENDPOINT_MAX_RATIO
+    #    b) 时长下限
+    duration_short_veto = False
+    if config.DURATION_VETO_ENABLED and expected_duration_ms:
+        duration_short_veto = duration_ms < expected_duration_ms * config.DURATION_MIN_RATIO
+
     composite = config.W_DTW * s_dtw + config.W_BIO * s_bio
     # 任意一道一票否决触发 → composite 封顶到 SMOOTHNESS_CAP，阻断脚本。
     if (
@@ -233,6 +258,8 @@ def score_trajectory(
         or axial_asymmetry_veto
         or subpixel_veto
         or min_duration_veto
+        or endpoint_veto
+        or duration_short_veto
     ):
         composite = min(composite, config.SMOOTHNESS_CAP)
 
@@ -264,6 +291,10 @@ def score_trajectory(
         subpixel_entropy_y=round(float(sub_entropy_y), 4),
         min_duration_veto=min_duration_veto,
         duration_ms=round(duration_ms, 3),
+        endpoint_veto=endpoint_veto,
+        endpoint_dist_px=round(endpoint_dist, 3),
+        duration_short_veto=duration_short_veto,
+        expected_duration_ms=round(float(expected_duration_ms or 0.0), 3),
         extras={},
     )
 
