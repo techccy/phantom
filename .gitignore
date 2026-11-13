@@ -2,6 +2,9 @@
 docs/
 .DS_Store
 
+# 网友修改材料（本地暂存，不入库）
+wovhc/
+
 # Python
 __pycache__/
 *.py[cod]

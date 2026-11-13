@@ -85,6 +85,8 @@ def create_challenge(
         "canvas_w": canvas_w,
         "canvas_h": canvas_h,
         "duration": duration,
+        # 终点命中否决用
+        "target_half": target_half,
         "created_at_ms": _now_ms(),
     }
 

@@ -104,6 +104,7 @@ async def verify(req: models.VerifyRequest):
         )
 
     # 4) 评分
+    _duration = record.get("duration")
     breakdown = scoring.engine.score_trajectory(
         xs,
         ys,
@@ -111,6 +112,8 @@ async def verify(req: models.VerifyRequest):
         record["control_points"],
         record["canvas_w"],
         record["canvas_h"],
+        target_half=record.get("target_half"),
+        expected_duration_ms=(float(_duration) * 1000.0) if _duration else None,
     )
     detail = scoring.engine.breakdown_to_dict(breakdown)
 

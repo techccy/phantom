@@ -158,6 +158,14 @@ SUBPIXEL_MIN_POINTS: int = _env_int("PHANTOM_SUBPIXEL_MIN_POINTS", 40)
 # 低于此下限直接判为自动化脚本。
 MIN_HUMAN_DURATION_MS: float = _env_float("PHANTOM_MIN_HUMAN_DURATION_MS", 250.0)
 
+# ---- 轨迹完整性校验 ----
+# a) 终点命中
+ENDPOINT_VETO_ENABLED: bool = _env_bool("PHANTOM_ENDPOINT_VETO", True)
+ENDPOINT_MAX_RATIO: float = _env_float("PHANTOM_ENDPOINT_MAX_RATIO", 2.0)
+# b) 时长下限
+DURATION_VETO_ENABLED: bool = _env_bool("PHANTOM_DURATION_VETO", True)
+DURATION_MIN_RATIO: float = _env_float("PHANTOM_DURATION_MIN_RATIO", 0.80)
+
 # ---- _energy_score 边界（残差能量 px；手册 §三.3）----
 # <ENERGY_MIN≈过度平滑→0；ENERGY_LOW~HIGH 为生理区间→1；>ENERGY_MAX≈粗糙白噪→0
 # 注：移动端浏览器 pointermove 被合并降采样，真人触屏残差天然偏小（实测 ~0.15px），

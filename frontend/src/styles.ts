@@ -1,20 +1,17 @@
-// Widget 注入式样式：mount() 时把 <style> 注入宿主页面，并提供 dark/light 主题。
-// 所有类名加 `.phantom-` 前缀以防与宿主页面 CSS 冲突。
-//
-// 接入形态仿 Cloudflare Turnstile / reCAPTCHA v2：
-//   - 表单内只留紧凑复选框长条（.phantom-bar），几乎不占空间
-//   - 点击复选框弹出居中模态（.phantom-modal），主体（画布+按住按钮）在模态内
-//   - 验证成功后模态消失，复选框变为已验证态
-//
-// 视觉风格复刻 design-os（docs/ui-design/design-os）：暖中性 stone 调 + lime-500 强调，
-// DM Sans / IBM Plex Mono 字体。参见 index.html 设计 token。
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * 基于 techccy/phantom（MPL-2.0）修改。说明见 NOTICE.md。
+ */
+
+/* widget 样式 */
 
 export type Theme = "dark" | "light";
 
 let injected = false;
 const STYLE_ID = "phantom-widget-style";
 
-/** 幂等注入全局样式表。多次 mount 只注入一次。 */
 export function injectStyles(): void {
   if (injected) return;
   if (document.getElementById(STYLE_ID)) {
@@ -24,51 +21,41 @@ export function injectStyles(): void {
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
-/* ===== design-os 设计 token（light 默认 / dark 覆盖） =====
-   暖中性 stone 色阶 + lime-500 强调。所有颜色与 design-os src/index.css 对齐。
-   ⚠️ token 必须同时挂在 .phantom-widget 与 .phantom-modal 上：模态被插入到
-   document.body 末尾（脱离 .phantom-widget 子树），自定义属性只沿 DOM 树继承，
-   若只在 .phantom-widget 上声明，模态卡片 / 遮罩 / 画布底色全部解析为空 → 透明，
-   导致文字与按钮直接浮在原网页上（issue：弹窗无背景）。 */
 .phantom-widget,
 .phantom-modal,
 .phantom-modal[data-theme="light"] {
-  /* —— 通用 token —— */
   --ph-radius: 0.5rem;
-  --ph-radius-sm: 4px;        /* calc(--radius - 4px) */
-  --ph-radius-md: 6px;        /* calc(--radius - 2px) */
-  --ph-radius-lg: 8px;        /* = --radius */
-  --ph-radius-xl: 12px;       /* calc(--radius + 4px) */
+  --ph-radius-sm: 4px;
+  --ph-radius-md: 6px;
+  --ph-radius-lg: 8px;
+  --ph-radius-xl: 12px;
   --ph-radius-full: 999px;
 
   --ph-font-display: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --ph-font-body: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --ph-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* —— Light：Warm Stone palette —— */
-  --ph-bg: oklch(0.985 0.001 106.424);          /* stone-50  #FAFAF9 */
-  --ph-fg: oklch(0.216 0.006 56.043);           /* stone-900 #1C1917 */
-  --ph-card: oklch(1 0 0);                      /* white */
+  --ph-bg: oklch(0.985 0.001 106.424);
+  --ph-fg: oklch(0.216 0.006 56.043);
+  --ph-card: oklch(1 0 0);
   --ph-card-fg: oklch(0.216 0.006 56.043);
-  --ph-muted: oklch(0.970 0.001 106.424);       /* stone-100 */
-  --ph-muted-fg: oklch(0.444 0.011 73.639);     /* stone-600 #57534E */
-  --ph-subtle-fg: oklch(0.553 0.013 58.071);    /* stone-500 */
-  --ph-border: oklch(0.923 0.003 48.717);       /* stone-200 #E7E5E4 */
-  --ph-border-subtle: oklch(0.970 0.001 106.424); /* stone-100 */
-  --ph-primary: oklch(0.216 0.006 56.043);      /* stone-900 */
-  --ph-primary-fg: oklch(0.985 0.001 106.424);  /* stone-50 */
-  --ph-accent: oklch(0.532 0.157 131.589);      /* lime-600 (light 下更深保证对比) */
+  --ph-muted: oklch(0.970 0.001 106.424);
+  --ph-muted-fg: oklch(0.444 0.011 73.639);
+  --ph-subtle-fg: oklch(0.553 0.013 58.071);
+  --ph-border: oklch(0.923 0.003 48.717);
+  --ph-border-subtle: oklch(0.970 0.001 106.424);
+  --ph-primary: oklch(0.216 0.006 56.043);
+  --ph-primary-fg: oklch(0.985 0.001 106.424);
+  --ph-accent: oklch(0.532 0.157 131.589);
   --ph-accent-soft: color-mix(in oklch, var(--ph-accent) 22%, transparent);
 
-  --ph-overlay-bg: rgba(0, 0, 0, 0.5);          /* design-os Dialog: bg-black/50 */
+  --ph-overlay-bg: rgba(0, 0, 0, 0.5);
   --ph-shadow-sm: 0 1px 2px 0 rgba(28, 25, 23, 0.05);
   --ph-shadow-lg: 0 10px 15px -3px rgba(28, 25, 23, 0.1), 0 4px 6px -4px rgba(28, 25, 23, 0.05);
 
-  /* —— 画布相关 —— */
-  --ph-canvas-bg: oklch(0.216 0.006 56.043);    /* stone-900 噪点底 */
+  --ph-canvas-bg: oklch(0.216 0.006 56.043);
   --ph-canvas-border: var(--ph-border);
 
-  /* —— 进度条充能时长，由 JS 按后端下发的 duration 注入 —— */
   --ph-charge-duration: 3s;
 
   font-family: var(--ph-font-body);
@@ -77,21 +64,20 @@ export function injectStyles(): void {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-/* dark 主题覆盖 token（模态同样在 body 末尾，需单独匹配 data-theme="dark"） */
 .phantom-widget[data-theme="dark"],
 .phantom-modal[data-theme="dark"] {
-  --ph-bg: oklch(0.216 0.006 56.043);           /* stone-900 #1C1917 */
-  --ph-fg: oklch(0.985 0.001 106.424);          /* stone-50 */
-  --ph-card: oklch(0.268 0.007 34.298);         /* stone-800 #292524 */
+  --ph-bg: oklch(0.216 0.006 56.043);
+  --ph-fg: oklch(0.985 0.001 106.424);
+  --ph-card: oklch(0.268 0.007 34.298);
   --ph-card-fg: oklch(0.985 0.001 106.424);
-  --ph-muted: oklch(0.318 0.008 43.185);        /* stone-700 */
-  --ph-muted-fg: oklch(0.709 0.01 56.259);      /* stone-400 #A8A29E */
-  --ph-subtle-fg: oklch(0.553 0.013 58.071);    /* stone-500 */
-  --ph-border: oklch(0.370 0.010 67.558);       /* stone-600 */
-  --ph-border-subtle: oklch(0.318 0.008 43.185);/* stone-700 */
-  --ph-primary: oklch(0.923 0.003 48.717);      /* stone-200 */
-  --ph-primary-fg: oklch(0.216 0.006 56.043);   /* stone-900 */
-  --ph-accent: oklch(0.648 0.2 131.684);        /* lime-500 */
+  --ph-muted: oklch(0.318 0.008 43.185);
+  --ph-muted-fg: oklch(0.709 0.01 56.259);
+  --ph-subtle-fg: oklch(0.553 0.013 58.071);
+  --ph-border: oklch(0.370 0.010 67.558);
+  --ph-border-subtle: oklch(0.318 0.008 43.185);
+  --ph-primary: oklch(0.923 0.003 48.717);
+  --ph-primary-fg: oklch(0.216 0.006 56.043);
+  --ph-accent: oklch(0.648 0.2 131.684);
   --ph-accent-soft: color-mix(in oklch, var(--ph-accent) 22%, transparent);
 
   --ph-overlay-bg: rgba(0, 0, 0, 0.6);
@@ -99,7 +85,6 @@ export function injectStyles(): void {
   --ph-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
 }
 
-/* 让容器本身自适应宽度（紧凑框宽度由内容决定） */
 .phantom-widget {
   display: block;
   width: max-content;
@@ -107,10 +92,6 @@ export function injectStyles(): void {
   color: var(--ph-fg);
 }
 
-/* ============================================================
-   紧凑复选框长条（表单内常驻，仿 Turnstile/reCAPTCHA v2）
-   data-state: idle / verifying / verified / error
-   ============================================================ */
 .phantom-widget .phantom-bar {
   display: flex;
   align-items: center;
@@ -135,17 +116,14 @@ export function injectStyles(): void {
   border-color: var(--ph-subtle-fg);
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--ph-subtle-fg) 50%, transparent);
 }
-/* verifying：紧凑框微弱 loading 描边 */
 .phantom-widget .phantom-bar[data-state="verifying"] {
   cursor: default;
   border-color: color-mix(in oklch, var(--ph-accent) 50%, var(--ph-border));
 }
-/* verified：lime 强调描边 */
 .phantom-widget .phantom-bar[data-state="verified"] {
   border-color: var(--ph-accent);
   cursor: default;
 }
-/* error：红色描边 + 轻微震动 */
 .phantom-widget .phantom-bar[data-state="error"] {
   border-color: var(--ph-danger, oklch(0.586 0.253 17.585));
   animation: phantom-bar-shake 0.2s ease;
@@ -156,7 +134,6 @@ export function injectStyles(): void {
   75% { transform: translateX(3px); }
 }
 
-/* 复选框（左） */
 .phantom-widget .phantom-check {
   flex: 0 0 auto;
   width: 22px;
@@ -173,7 +150,6 @@ export function injectStyles(): void {
 .phantom-widget .phantom-bar[data-state="idle"]:hover .phantom-check {
   border-color: var(--ph-accent);
 }
-/* verifying：旋转的 lime 圆点 spinner */
 .phantom-widget .phantom-bar[data-state="verifying"] .phantom-check {
   border: 2px solid transparent;
   border-top-color: var(--ph-accent);
@@ -183,7 +159,6 @@ export function injectStyles(): void {
 @keyframes phantom-spin {
   to { transform: rotate(360deg); }
 }
-/* verified：lime 实心 + 白色对勾 */
 .phantom-widget .phantom-bar[data-state="verified"] .phantom-check {
   border-color: var(--ph-accent);
   background: var(--ph-accent);
@@ -193,14 +168,12 @@ export function injectStyles(): void {
   width: 14px;
   height: 14px;
 }
-/* error：红色实心 + 感叹号 */
 .phantom-widget .phantom-bar[data-state="error"] .phantom-check {
   border-color: var(--ph-danger, oklch(0.586 0.253 17.585));
   background: var(--ph-danger, oklch(0.586 0.253 17.585));
   color: #fff;
 }
 
-/* 中间文案 */
 .phantom-widget .phantom-bar-text {
   flex: 1 1 auto;
   font-family: var(--ph-font-body);
@@ -213,7 +186,6 @@ export function injectStyles(): void {
   color: var(--ph-fg);
 }
 
-/* 右侧 logo + 版权区 */
 .phantom-widget .phantom-bar-brand {
   flex: 0 0 auto;
   display: flex;
@@ -247,13 +219,10 @@ export function injectStyles(): void {
   color: var(--ph-accent);
 }
 
-/* ============================================================
-   居中模态弹窗（document.body 末尾，验证主体容器）
-   ============================================================ */
 .phantom-modal {
   position: fixed;
   inset: 0;
-  z-index: 2147483000; /* 高于绝大多数宿主元素 */
+  z-index: 2147483000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -263,7 +232,6 @@ export function injectStyles(): void {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--ph-fg);
-  /* 遮罩层 */
   background: var(--ph-overlay-bg);
   animation: phantom-modal-fade-in 200ms ease-out;
 }
@@ -286,6 +254,9 @@ export function injectStyles(): void {
   gap: 1rem;
   width: max-content;
   max-width: calc(100% - 2rem);
+  --ph-chrome-h: 270px;
+  max-height: calc(100% - 1rem);
+  overflow-y: auto;
   padding: 1.5rem;
   border: 1px solid var(--ph-border);
   border-radius: var(--ph-radius-lg);
@@ -293,9 +264,6 @@ export function injectStyles(): void {
   color: var(--ph-card-fg);
   box-shadow: var(--ph-shadow-lg);
   animation: phantom-modal-pop-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
-  /* 整卡禁选 + 抑制触摸手势：按住按钮向画布拖动时，浏览器不会启动文本选择
-     或长按菜单。子元素（标题/提示/画布/按钮）继承此规则，无需逐个声明。
-     旧 WebKit/Safari 仅认 -webkit- 前缀，故两者都写。touch-action 不影响 click。 */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -313,7 +281,6 @@ export function injectStyles(): void {
   to { opacity: 0; transform: scale(0.97); }
 }
 
-/* 模态头部：logo + 标题 + 关闭按钮 */
 .phantom-modal-head {
   display: flex;
   align-items: center;
@@ -360,7 +327,6 @@ export function injectStyles(): void {
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--ph-subtle-fg) 50%, transparent);
 }
 
-/* 模态主体（画布 + 提示 + 按住按钮） */
 .phantom-modal-body {
   display: flex;
   flex-direction: column;
@@ -368,11 +334,6 @@ export function injectStyles(): void {
   gap: 0.75rem;
 }
 
-/* ============================================================
-   阶段提示框（画布上方常规流，非覆盖画布）
-   参考 design-os 的 eyebrow：带柔光状态点 + 阶段文案，随状态机切换。
-   data-stage 控制：loading / ready / preview / collect / stopped / done
-   ============================================================ */
 .phantom-modal .phantom-hint {
   display: flex;
   align-items: center;
@@ -384,7 +345,6 @@ export function injectStyles(): void {
   border: 1px solid var(--ph-border);
   border-radius: var(--ph-radius-md);
   background: var(--ph-muted);
-  /* 字体放大：与画布同宽的提示条，需要更大字号才不会显得空旷 */
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.005em;
@@ -403,12 +363,10 @@ export function injectStyles(): void {
   box-shadow: 0 0 0 4px var(--ph-accent-soft);
   transition: background 200ms ease, box-shadow 200ms ease;
 }
-/* loading / 空文案：不画状态点 */
 .phantom-modal .phantom-hint:empty::before,
 .phantom-modal .phantom-hint[data-stage="loading"]::before {
   display: none;
 }
-/* 预热阶段：状态点呼吸（呼应方块呼吸显影） */
 .phantom-modal .phantom-hint[data-stage="preview"]::before {
   animation: phantom-hint-pulse 1s ease-in-out infinite;
 }
@@ -416,16 +374,50 @@ export function injectStyles(): void {
   0%, 100% { box-shadow: 0 0 0 3px var(--ph-accent-soft); }
   50% { box-shadow: 0 0 0 6px var(--ph-accent-soft); }
 }
-/* 停止移动阶段：状态点转 lime，提示"该松手了" */
 .phantom-modal .phantom-hint[data-stage="stopped"]::before {
   background: var(--ph-accent);
   box-shadow: 0 0 0 3px var(--ph-accent-soft);
 }
 
-/* ---------- 画布 + 玩法遮罩 ---------- */
+.phantom-modal .phantom-loupe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  opacity: 0.45;
+  transition: opacity 150ms ease;
+}
+.phantom-modal .phantom-loupe-live {
+  opacity: 1;
+}
+.phantom-modal-card.phantom-has-loupe {
+  --ph-chrome-h: 460px;
+}
+.phantom-modal-card.phantom-has-pad {
+  --ph-chrome-h: calc(34vh + 210px);
+}
+.phantom-modal .phantom-loupe-view {
+  display: block;
+  border: 1px solid var(--ph-canvas-border);
+  border-radius: var(--ph-radius-md);
+  background: var(--ph-canvas-bg);
+  image-rendering: pixelated;
+  box-shadow: var(--ph-shadow-sm);
+}
+.phantom-modal .phantom-loupe-live .phantom-loupe-view {
+  border-color: var(--ph-accent);
+}
+.phantom-modal .phantom-loupe-label {
+  font-family: var(--ph-font-mono);
+  font-size: 0.7rem;
+  color: var(--ph-subtle-fg);
+  line-height: 1.2;
+  text-align: center;
+}
+
 .phantom-modal .phantom-stage-wrap {
   position: relative;
-  line-height: 0; /* 消除 inline canvas 的底部空隙 */
+  line-height: 0;
 }
 .phantom-modal canvas.phantom-stage {
   border: 1px solid var(--ph-canvas-border);
@@ -435,8 +427,11 @@ export function injectStyles(): void {
   touch-action: none;
   -webkit-user-select: none;
   display: block;
-  /* 响应式：窄屏按宽度等比缩放（tracker 按比例映射，安全） */
   max-width: 100%;
+  max-height: calc(100vh - var(--ph-chrome-h, 270px));
+  max-height: calc(100dvh - var(--ph-chrome-h, 270px));
+  min-height: 200px;
+  width: auto;
   height: auto;
 }
 .phantom-modal .phantom-overlay {
@@ -467,10 +462,6 @@ export function injectStyles(): void {
   color: rgba(255, 255, 255, 0.95);
 }
 
-/* ============================================================
-   按住按钮：design-os 配色 + 多状态微交互
-   （保持原有充能进度条 / 成功 / 失败 / 重试 / 震动 / 呼吸逻辑）
-   ============================================================ */
 .phantom-modal button.phantom-activate {
   position: relative;
   overflow: hidden;
@@ -498,6 +489,68 @@ export function injectStyles(): void {
   0%, 100% { box-shadow: 0 0 0 transparent; }
   50% { box-shadow: 0 0 0 3px var(--ph-accent-soft); }
 }
+
+.phantom-modal button.phantom-activate.phantom-pad {
+  height: auto;
+  aspect-ratio: 1 / 1;
+  max-width: min(100%, 34vh);
+  max-height: 34vh;
+  border-radius: var(--ph-radius-lg);
+  border: 1px dashed var(--ph-border);
+  background: var(--ph-muted);
+  color: var(--ph-muted-fg);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0.75rem;
+  box-sizing: border-box;
+  animation: none;
+  background-image:
+    linear-gradient(to right, var(--ph-border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ph-border-subtle) 1px, transparent 1px);
+  background-size: 12.5% 12.5%;
+}
+.phantom-modal button.phantom-activate.phantom-pad:disabled {
+  opacity: 0.5;
+}
+.phantom-modal button.phantom-activate.phantom-pad.phantom-holding {
+  border-style: solid;
+  border-color: var(--ph-accent);
+  background-color: var(--ph-card);
+}
+.phantom-modal button.phantom-activate.phantom-pad.phantom-success,
+.phantom-modal button.phantom-activate.phantom-pad.phantom-fail,
+.phantom-modal button.phantom-activate.phantom-pad.phantom-retry {
+  border-style: solid;
+  background-image: none;
+  align-items: center;
+  padding-bottom: 0;
+}
+
+.phantom-modal .phantom-cursor {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  border: 2px solid var(--ph-accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  will-change: left, top;
+}
+.phantom-modal .phantom-cursor::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: var(--ph-accent);
+}
 .phantom-modal button.phantom-activate:hover:not(:disabled):not(.phantom-retry) {
   transform: translateY(-1px);
   box-shadow: 0 0 0 3px var(--ph-accent-soft);
@@ -512,15 +565,12 @@ export function injectStyles(): void {
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--ph-subtle-fg) 50%, transparent);
 }
 
-/* Holding：按下瞬间充能 + 进度条跑动 */
 .phantom-modal button.phantom-activate.phantom-holding {
   cursor: grabbing;
   transform: scale(0.98);
   box-shadow: 0 0 0 3px var(--ph-accent), 0 0 16px var(--ph-accent-soft);
   animation: none;
 }
-/* 进度条：绝对贴底，动画 0 → 100%，linear。每次加 .phantom-holding 重新播放，
-   松手移除 class 时动画随之取消，宽度瞬间归零，避免重试时的回退动画残影。 */
 .phantom-modal button.phantom-activate .phantom-progress {
   position: absolute;
   left: 0;
@@ -539,7 +589,6 @@ export function injectStyles(): void {
   to { width: 100%; }
 }
 
-/* Success：lime 绿 + 微放大 */
 .phantom-modal button.phantom-activate.phantom-success {
   border-color: var(--ph-accent);
   background: var(--ph-accent);
@@ -553,7 +602,6 @@ export function injectStyles(): void {
   100% { transform: scale(1); }
 }
 
-/* Fail：红色 + 水平震动 */
 .phantom-modal button.phantom-activate.phantom-fail {
   border-color: var(--ph-danger, oklch(0.586 0.253 17.585));
   background: var(--ph-danger, oklch(0.586 0.253 17.585));
@@ -568,7 +616,6 @@ export function injectStyles(): void {
   80% { transform: translateX(3px); }
 }
 
-/* Retry：点击刷新重试 */
 .phantom-modal button.phantom-activate.phantom-retry {
   background: var(--ph-muted);
   border-color: var(--ph-border);
@@ -580,7 +627,6 @@ export function injectStyles(): void {
   filter: brightness(1.04);
 }
 
-/* ---------- 文本提示（仅 loading / 初始化失败） ---------- */
 .phantom-modal .phantom-status {
   font-size: 0.8rem;
   color: var(--ph-muted-fg);
